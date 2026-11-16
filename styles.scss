@@ -1,0 +1,24 @@
+/*-- scss:defaults --*/
+$font-family-sans-serif: "Source Sans Pro", "Helvetica Neue", Helvetica, sans-serif;
+$presentation-font-size-root: 34px;
+$code-block-font-size: 0.52em;
+$link-color: #b02a37;
+$presentation-heading-color: #1f2a44;
+
+/*-- scss:rules --*/
+.reveal .slide-number { font-size: 0.5em; }
+.reveal pre code { max-height: 560px; line-height: 1.25; }
+.reveal .columns .column h3 {
+  font-size: 0.7em;
+  margin-bottom: 0.2em;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.reveal .before h3 { color: #6c757d; }
+.reveal .after h3 { color: #b02a37; }
+.reveal .small { font-size: 0.7em; }
+.reveal .muted { color: #6c757d; }
+.reveal table { font-size: 0.62em; }
+.reveal .big-number { font-size: 2.2em; font-weight: 700; color: #b02a37; line-height: 1; }
+.reveal .mermaid svg { max-height: 520px; }

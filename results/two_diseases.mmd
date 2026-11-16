@@ -1,0 +1,22 @@
+flowchart LR
+    subgraph stages0["Stages: Influenza"]
+        direction LR
+        d0s0["Susceptible"]
+        d0s1["Exposed"]:::carrier
+        d0s2["Infectious"]:::infectious
+        d0s3["Recovered"]
+        d0s0 --> d0s1
+        d0s1 --> d0s2
+        d0s2 --> d0s3
+    end
+    subgraph stages1["Stages: RSV"]
+        direction LR
+        d1s0["Susceptible"]
+        d1s1["Infectious"]:::infectious
+        d1s2["Recovered"]
+        d1s0 --> d1s1
+        d1s1 --> d1s2
+    end
+    classDef infectious fill:#f8d7da,stroke:#b02a37
+    classDef carrier fill:#fff3cd,stroke:#997404
+    classDef away fill:#e2e3e5,stroke:#6c757d

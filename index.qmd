@@ -1,0 +1,860 @@
+---
+title: "epiworld 1.0"
+subtitle: "Contact layers, natural histories, and several diseases"
+author: "George G. Vega Yon"
+date: 2026-11-19
+format:
+  revealjs:
+    theme: [default, styles.scss]
+    slide-number: true
+    code-line-numbers: false
+    highlight-style: github
+    width: 1280
+    height: 720
+    footer: "epiworld 1.0 · UofUEpiBio"
+    mermaid-format: png
+    mermaid:
+      theme: neutral
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+library(ggplot2)
+library(data.table)
+theme_set(
+  theme_minimal(base_size = 16) +
+    theme(legend.position = "top", panel.grid.minor = element_blank())
+)
+pal <- c("#1f2a44", "#b02a37", "#d39e00", "#2a9d8f")
+```
+
+<!--
+  About 30 minutes. Three parts:
+  1. What changed and why (slides 2-5)
+  2. Before and after, side by side (slides 6-17)
+  3. New capabilities, with runs (slides 18-28)
+  Then what is next.
+
+  The examples' results come from examples/*.cpp, built against the vendored
+  epiworld v1-layers header (vendor/VERSION): `make results`.
+-->
+
+## Where we are
+
+:::: {.columns}
+::: {.column width="55%"}
+- **Last release:** epiworld 0.18.0 (October 2026)
+- **1.0 in progress** on the `v1-layers` branches of epiworld, epiworldR, epiworldpy, epiworldjs and measles
+- **More than 50 pull requests** in epiworld since 0.18.0, each one followed by ports to the wrappers
+- Every engine change is checked against the 0.x engine in **epiworld-benchmark**
+:::
+::: {.column width="45%"}
+### Four big changes
+
+1. **Contact layers**: networks and mixing, in one model
+2. **Natural histories**: stages declared on the virus, statuses on the model
+3. **Several diseases** per model
+4. **A smaller API**: fewer models, one placement vocabulary, plain classes
+:::
+::::
+
+<!-- The release waits for Phases 4-7 (participation, push for mixing, the
+     combination rule, measles as presets). -->
+
+## Why a 1.0?
+
+:::: {.columns}
+::: {.column width="50%"}
+### What 0.18 made hard
+
+- A model had **one** contact structure: a network *or* mixing by entities
+- States and their logic were **hand-written update functions**
+- Quarantine meant **duplicated states**: "Quarantined Exposed", "Isolated Recovered", ...
+- Durations were **geometric** (memoryless), unless you wrote your own timers
+- Every virus **shared the model's states**: no two diseases with their own histories
+:::
+::: {.column width="50%"}
+### What 1.0 does
+
+- A model has **layers**: households, work, school, public spaces, each the kind that fits
+- States are **declared**: stages, transitions, durations, rates
+- **Status × stage**: where an agent is, and how sick it is, apart
+- Durations: **fixed, geometric, lognormal, gamma**, or your function
+- **Several diseases**, each with its own natural history
+:::
+::::
+
+## By the numbers
+
+:::: {.columns}
+::: {.column width="33%"}
+[20 → 12]{.big-number}
+
+model headers in `models/` (5,596 → 2,080 lines)
+:::
+::: {.column width="33%"}
+[10 → 5 × 4]{.big-number}
+
+the SEIR quarantine model: 10 hand-written states became 5 stages × 4 statuses, on any layers
+:::
+::: {.column width="33%"}
+[≈ 1.0×]{.big-number}
+
+simulation time against 0.x on the benchmark scenarios (1.00–1.12), with less memory
+:::
+::::
+
+<br>
+
+- The engine stayed about the same size (23,000 → 24,000 lines of headers) while doing more
+- The measles library shrank from 4,108 to 2,783 lines
+
+<!-- Memory: peak 0.57-0.96 of 0.x in the NH-5b-2 rerun (epiworld-benchmark #40). -->
+
+# Before and after {background-color="#1f2a44"}
+
+## Hello world
+
+:::: {.columns}
+::: {.column width="50%" .before}
+### 0.18
+
+```cpp
+epimodels::ModelSIR<> hello(
+    "COVID-19", // Name of the virus
+    0.01,       // Initial prevalence
+    0.1,        // Transmission probability
+    0.3         // Recovery probability
+);
+
+// The population comes from the network
+hello.agents_smallworld(100000, 10L, false, .01);
+
+hello.run(100, 122);
+hello.print();
+```
+:::
+::: {.column width="50%" .after}
+### 1.0
+
+```cpp
+epimodels::ModelSIR hello(
+    "COVID-19", // Name of the virus
+    100000,     // Number of agents
+    0.01,       // Initial prevalence
+    0.1,        // Transmission probability
+    0.3         // Recovery probability
+);
+
+// Contacts come from layers
+hello.add_layer(layer::network(
+    "contacts", graph::smallworld(10, .01)
+));
+
+hello.run(100, 122);
+hello.print();
+```
+:::
+::::
+
+- The model owns its population (`n`); networks are **layers**, drawn anew for every run
+- No template parameter: `ModelSIR`, `Model`, `Virus` are plain classes
+
+## Building a model from scratch
+
+:::: {.columns}
+::: {.column width="50%" .before}
+### 0.18
+
+```cpp
+Model<> model;
+model.add_state("Susceptible",
+    default_update_susceptible<>);
+model.add_state("Infected",
+    default_update_exposed<>);
+model.add_state("Recovered");
+
+Virus<> virus("covid 19", 100, false);
+virus.set_prob_infecting(.10);
+virus.set_prob_recovery(.30);
+virus.set_state(1, 2);
+
+model.add_virus(virus);
+model.agents_smallworld(100000, 10L, false, .01);
+```
+:::
+::: {.column width="50%" .after}
+### 1.0
+
+```cpp
+Model model(100000);
+
+Virus virus("covid 19");
+virus.add_stage("Susceptible");
+virus.add_stage("Infected", stage::infectious);
+virus.add_stage("Recovered");
+virus.infection(0, 1, 0.10);
+virus.rate(1, 2, 0.30).effect(Effect::recovery);
+
+model.add_virus(virus, assign::count(100));
+model.add_layer(layer::network(
+    "contacts", graph::smallworld(10, .01)
+));
+```
+:::
+::::
+
+- The **virus carries its natural history**: stages and the transitions between them
+- Every number becomes a **model parameter** (`"covid 19: Infected -> Recovered"`), changeable with `set_param()`
+
+## Four kinds of transitions
+
+| Declared with | Happens | Evaluated |
+|---|---|---|
+| `infection(from, to, p)` | a contact with an infectious agent transmits | daily, from the day's contacts (any layer) |
+| `rate(from, to, p)` | with a daily probability | daily: can change during the run, or under a tool |
+| `after(from, to, duration)` | when a duration, drawn on entering the stage, ends | once, on entry |
+| `external(from, to, name)` | when code fires it (`model.fire()`) | when fired |
+
+<br>
+
+```cpp
+flu.after(E, I, Duration::lognormal(3.0, 1.0));           // shaped duration
+flu.rate(I, R, "Recovery rate").effect(Effect::recovery); // a tool can speed it up
+flu.rate(I, H, "Hospitalization rate");                   // competes with recovery
+flu.external({E, I}, R, "Antiviral cure");                // fired by an intervention
+```
+
+<!-- Rates compete through one roulette draw (odds); a rate plus a branch,
+     .to({{R, 0.9}, {H, 0.1}}), gives exact probabilities. Docs page:
+     docs/impl/natural-history-and-statuses.md -->
+
+## Custom logic: a community and a hospital
+
+:::: {.columns}
+::: {.column width="50%" .before}
+### 0.18: one update function per state
+
+```cpp
+inline void update_infected(Agent<int> * p, Model<int> * m)
+{
+    auto hm = static_cast<CommunityHospModel*>(m);
+    std::vector< epiworld_double > probs = {
+        m->par("Prob hospitalization"),
+        m->par("Prob recovery")
+    };
+    int res = roulette<>(probs, m);
+    if (res == 0)
+        p->change_state(*m, hm->infected_hospitalized_state);
+    else if (res == 1)
+        p->rm_virus(*m, hm->susceptible_state);
+}
+// ... update_susceptible, update_infected_hospitalized,
+// a sampler excluding the hospitalized, a model class
+```
+:::
+::: {.column width="50%" .after}
+### 1.0: declarations
+
+```cpp
+Virus mrsa("MRSA");
+mrsa.add_stage("Susceptible");
+int inf  = mrsa.add_stage("Infected", stage::infectious);
+int hosp = mrsa.add_stage("Infected (hospitalized)",
+                          stage::carrier);
+
+// Hospitalized carriers don't transmit
+mrsa.infection(0, inf, 0.1).to({
+    {inf,  Value::complement("Prob hospitalization")},
+    {hosp, "Prob hospitalization"}
+});
+mrsa.rate(inf, hosp, "Prob hospitalization");
+mrsa.rate(inf, 0, "Prob recovery");
+mrsa.rate(hosp, 0, "Prob recovery");
+mrsa.rate(hosp, inf, "Discharge infected");
+```
+:::
+::::
+
+<!-- examples/14-community-hosp in both versions: about 130 lines before,
+     45 after. -->
+
+## Mixing: from entities to layers (R)
+
+:::: {.columns}
+::: {.column width="50%" .before}
+### epiworldR 0.x
+
+```r
+e1 <- entity("Population 1", 3e3, as_proportion = FALSE)
+e2 <- entity("Population 2", 3e3, as_proportion = FALSE)
+e3 <- entity("Population 3", 3e3, as_proportion = FALSE)
+
+flu_model <- ModelSEIRMixing(
+  name              = "Flu",
+  n                 = 9e3,
+  prevalence        = 1 / 9e3,
+  transmission_rate = 0.1,
+  recovery_rate     = 1 / 7,
+  incubation_days   = 7,
+  contact_matrix    = cmatrix
+)
+
+flu_model |>
+  add_entity(e1) |>
+  add_entity(e2) |>
+  add_entity(e3)
+```
+:::
+::: {.column width="50%" .after}
+### epiworldR 1.0
+
+```r
+groups <- rep(0:2, each = 3e3)
+
+flu_model <- ModelSEIR(
+  name              = "Flu",
+  n                 = 9e3,
+  prevalence        = 1 / 9e3,
+  transmission_prob = 0.1,
+  latent_period     = 7,
+  recovery_rate     = 1 / 7
+)
+
+add_layer(
+  flu_model,
+  layer_mixing(
+    "community",
+    groups         = groups,
+    contact_matrix = cmatrix
+  )
+)
+```
+:::
+::::
+
+- `ModelSEIRMixing` is gone: **the plain model plus a mixing layer**. Entities are gone: groups are a layer's membership.
+
+## Layers, three kinds
+
+:::: {.columns}
+::: {.column width="50%"}
+```cpp
+// A network: the same contacts every day
+layer::network("work", graph::smallworld(10, 0.05));
+
+// Mixing with a contact matrix: strangers, by group
+auto pub = layer::mixing("public");
+pub->set_groups(assign::shares(
+    {{0, 0.25}, {1, 0.5}, {2, 0.25}}), 3u);
+pub->set_contact_matrix({0.6, 0.3, 0.1,
+                         0.2, 0.6, 0.2,
+                         0.1, 0.4, 0.5});
+pub->set_contact_rate("Public contact rate");
+
+// Mixing within groups: households, classrooms
+auto home = layer::mixing("household");
+home->set_groups(assign::labels(household), n / 4u);
+home->set_contact_prob({0.5});
+```
+:::
+::: {.column width="50%"}
+- A model has **any number of layers**; each infection draw combines the contacts of all of them
+- Each transmission records **its layer**
+- Layers can **log contacts** for tracing (`enable_tracing()`)
+- A layer can be restricted to **some diseases** (`add_target("Measles")`)
+- Groups come from the same **`assign::`** vocabulary as viruses and tools
+:::
+::::
+
+## Fewer models
+
+| 0.18 | 1.0 |
+|---|---|
+| `ModelSIRCONN`, `ModelSEIRCONN`, `ModelSIRDCONN`, `ModelSEIRDCONN` | `ModelSIR`, `ModelSEIR`, `ModelSIRD`, `ModelSEIRD` + a one-group mixing layer |
+| `ModelSIRMixing`, `ModelSEIRMixing` | `ModelSIR`, `ModelSEIR` + a mixing layer |
+| `ModelSEIRNetworkQuarantine`, `ModelSEIRMixingQuarantine` | `ModelSEIRQuarantine`, on any layers |
+| Entities (`Entity`, `distribute_*_to_entities`) | layer memberships (`assign::`) |
+| `Model<TSeq>`, `Virus<TSeq>`, sequences | plain classes; variants by id (`strain()`, mutations) |
+
+<br>
+
+- **A registry** builds every model by name, with documented arguments: `make_model("SEIR", values)`, `list_models()`, `get_model_info()` — one binding in each wrapper instead of one per model
+
+## Placing viruses, tools and groups
+
+:::: {.columns}
+::: {.column width="50%" .before}
+### 0.18: one function family per target
+
+```cpp
+virus.set_distribution(
+    distribute_virus_randomly<>(0.01));
+model.add_virus(virus);
+
+Tool<> mask("Mask");
+mask.set_susceptibility_reduction(.3);
+mask.set_distribution(
+    distribute_tool_randomly<>(.3, true));
+model.add_tool(mask);
+
+// To entities:
+distribute_tool_to_entities<>(...);
+```
+:::
+::: {.column width="50%" .after}
+### 1.0: `assign::`, everywhere
+
+```cpp
+model.add_virus(virus, assign::share(0.01));
+
+Tool mask("Mask");
+mask.set_susceptibility_reduction(.3);
+model.add_tool(mask, assign::share(.3));
+
+// The same vocabulary for initial stages
+// and a layer's groups
+model.set_initial(assign::shares({{R, 0.2}}));
+layer->set_groups(assign::labels(group), k);
+model.add_tool(vax, assign::group_shares(...));
+```
+:::
+::::
+
+<span class="small muted">`share`, `count`, `shares`, `counts`, `group_shares`, `group_counts`, `agents`, `labels`, `by`</span>
+
+## Statuses: where an agent is, apart from its stage
+
+:::: {.columns}
+::: {.column width="50%" .before}
+### 0.18: `ModelSEIRNetworkQuarantine`
+
+```
+Susceptible
+Exposed
+Infected
+Isolated
+Detected Hospitalized
+Quarantined Susceptible
+Quarantined Exposed
+Isolated Recovered
+Hospitalized
+Recovered
+```
+10 states, each with its own update function (719 lines), and a second copy for mixing (787 lines)
+:::
+::: {.column width="50%" .after}
+### 1.0: `ModelSEIRQuarantine`
+
+```{mermaid}
+%%| fig-width: 6
+flowchart LR
+    subgraph stages["Stages"]
+        direction LR
+        s0["Susceptible"] --> s1["Exposed"]:::carrier
+        s1 --> s2["Infected"]:::infectious
+        s2 --> s4["Recovered"]
+        s2 --> s3["Severe"]:::carrier
+        s3 --> s4
+    end
+    subgraph statuses["Statuses"]
+        direction LR
+        q0["Free"] --> q1["Quarantined"]:::away
+        q1 --> q0
+        q0 --> q2["Isolated"]:::away
+        q1 --> q2
+        q2 --> q0
+        q0 --> q3["Hospitalized"]:::away
+        q3 --> q0
+    end
+    classDef infectious fill:#f8d7da,stroke:#b02a37
+    classDef carrier fill:#fff3cd,stroke:#997404
+    classDef away fill:#e2e3e5,stroke:#6c757d
+```
+5 stages × 4 statuses, declared (448 lines, any layers); the diagram is drawn from the declarations
+:::
+::::
+
+## Declaring statuses and reactions
+
+```cpp
+Statuses st;
+int free_       = st.add_status("Free");
+int quarantined = st.add_status("Quarantined");
+int isolated    = st.add_status("Isolated");
+st.set_contact(quarantined, 0.0);   // out of every layer
+st.set_contact(isolated, 0.0);
+
+int quarantine = st.external(free_, quarantined, "Quarantined");      // fired by tracing
+st.after(quarantined, free_, Duration::fixed(14)).name("Quarantine ends");
+
+st.rate(free_, isolated, "Detection rate").name("Detected").when({INFECTED});
+st.after(isolated, free_, Duration::fixed(7).since(INFECTED))         // 7 days from onset
+  .name("Isolation ends");
+int onset_q = st.external(quarantined, isolated, "Onset in quarantine");
+model.set_statuses(st);
+
+// Reactions: respond, in the same step, to an agent entering a stage
+model.react(Trigger::entered(INFECTED).was({quarantined}), onset_q);
+```
+
+- The disease progresses the same way whatever the status: a quarantined agent can be susceptible, latent, or infectious
+
+## Outputs
+
+:::: {.columns}
+::: {.column width="50%" .before}
+### 0.18
+
+- `get_hist_total()`: one **state** column ("Quarantined Exposed")
+- Transitions as a state-by-state matrix
+- Sequences in the variant tables
+:::
+::: {.column width="50%" .after}
+### 1.0
+
+- **`status` and `stage`** columns, apart
+- **`disease`** column in every table (with one disease, too)
+- `get_hist_transitions()`: daily counts **by transition name** ("Detected", "Isolation ends")
+- Transition matrices **by margin**: the pair, the stage, or the status
+- `get_transmissions()` records **the layer** of each transmission
+:::
+::::
+
+<!-- db.get_hist_total(&date, &status, &stage, &counts, all_diseases, &disease);
+     db.get_hist_transitions(date, transition, counts);
+     db.get_transition_probability(Margin::stage, model.disease_id("Flu")); -->
+
+## Performance
+
+```{r}
+#| label: performance
+#| fig-width: 11
+#| fig-height: 4.6
+perf <- data.table(
+  scenario = c(
+    "00 · 10,000", "00 · 100,000", "01 · 10,000", "01 · 100,000",
+    "02 · 10,000", "02 · 100,000", "03 · 1,000,000", "04 · 165,865 (GeoPops)"
+  ),
+  simulate = c(1.11, 1.12, 1.09, 1.00, 1.09, 1.01, 1.03, 1.08),
+  build    = c(0.84, 0.80, 0.84, 0.80, 0.84, 0.80, 0.81, 0.88),
+  memory   = c(0.80, 0.77, 0.91, 0.87, 0.96, 0.88, 0.72, 0.57)
+)
+perf <- melt(perf, id.vars = "scenario", variable.name = "measure", value.name = "ratio")
+perf[, scenario := factor(scenario, levels = rev(unique(scenario)))]
+ggplot(perf, aes(ratio, scenario, colour = measure)) +
+  geom_vline(xintercept = 1, linetype = 2, colour = "grey50") +
+  geom_point(size = 3.5, position = position_dodge(width = 0.6)) +
+  scale_colour_manual(values = pal[1:3], labels = c("Simulation time", "Build time", "Peak memory")) +
+  labs(x = "1.0 / 0.x (below 1: 1.0 is better)", y = NULL, colour = NULL)
+```
+
+<span class="small muted">epiworld-benchmark, medians over replicates; rerun after every engine change. The attack rates of the two engines agree.</span>
+
+<!-- Numbers: stage nh-5b-2 (epiworld-benchmark #40). GeoPops (04) went
+     from 0.97 to 1.08 with #377 (profiled: the one-disease stage update is
+     no longer inlined); a fix PR is planned before Phase 4. -->
+
+# New capabilities {background-color="#b02a37"}
+
+## 1. Households, work and public spaces, in one model
+
+```{r}
+#| label: layers
+#| fig-width: 11
+#| fig-height: 4.3
+l <- fread("results/layers.csv")
+l[, layer := factor(layer, levels = c("household", "work", "public"))]
+share <- l[, .(n = sum(n)), by = layer][, share := n / sum(n)]
+ggplot(l, aes(date, n, fill = layer)) +
+  geom_col(width = 1) +
+  scale_fill_manual(
+    values = pal[c(3, 1, 2)],
+    labels = share[order(layer), sprintf("%s (%.0f%%)", layer, 100 * share)]
+  ) +
+  labs(x = "Day", y = "New infections", fill = "Where")
+```
+
+<span class="small">SEIR, 20,000 agents: households of four (mixing within groups), work (a small-world network), public spaces (a contact matrix across three age groups). Each transmission records its layer. <span class="muted">`examples/layers.cpp`</span></span>
+
+## 2. Durations with a shape
+
+:::: {.columns}
+::: {.column width="40%"}
+```cpp
+// Same means: 4 days latent, 7 infectious
+if (shaped) {
+  v.after(E, I, Duration::lognormal(4.0, 1.0));
+  v.after(I, R, Duration::gamma(7.0, 2.0));
+} else {
+  v.after(E, I, Duration::geometric(4.0));
+  v.rate(I, R, 1.0 / 7.0);
+}
+```
+
+<span class="small">On a network, a less variable infectious period spreads further: few agents recover in a day or two, so more contacts are infected. 0.18 had only the geometric shape.</span>
+:::
+::: {.column width="60%"}
+```{r}
+#| label: durations
+#| fig-width: 7
+#| fig-height: 5
+d <- fread("results/durations.csv")
+dm <- d[, .(infectious = median(infectious)), by = .(durations, date)]
+ggplot(d, aes(date, infectious, colour = durations)) +
+  geom_line(aes(group = interaction(durations, run)), alpha = 0.15) +
+  geom_line(data = dm, linewidth = 1.2) +
+  scale_colour_manual(values = pal[1:2]) +
+  labs(x = "Day", y = "Infectious agents", colour = NULL)
+```
+:::
+::::
+
+<!-- 20 runs each, 20,000 agents, small world (k = 10). Thin lines: runs;
+     thick: the median. examples/durations.cpp -->
+
+## 3. Quarantine and tracing, on several layers
+
+:::: {.columns}
+::: {.column width="45%"}
+```cpp
+epimodels::ModelSEIRQuarantine model(
+    "Flu", n, 0.001, 0.06, 3.0, 1.0 / 7.0,
+    0.01, 7.0,
+    5.0,  // detection delay
+    14,   // quarantine period
+    0.5,  // quarantine willingness
+    0.9,  // isolation willingness
+    7,    // isolation period (from onset)
+    0.5,  // contact tracing probability
+    4u    // contact tracing window
+);
+model.add_layer(households);
+model.add_layer(layer::network(
+    "work", graph::smallworld(8, 0.05)));
+```
+<span class="small">Detected cases are isolated; their contacts **in every layer** are traced and quarantined.</span>
+:::
+::: {.column width="55%"}
+```{r}
+#| label: quarantine
+#| fig-width: 6.5
+#| fig-height: 5.2
+q <- fread("results/quarantine.csv")
+inf <- q[stage %in% c("Exposed", "Infected", "Severe"),
+         .(n = sum(count)), by = .(policy, run, date)]
+infm <- inf[, .(n = median(n)), by = .(policy, date)]
+ggplot(inf, aes(date, n, colour = policy)) +
+  geom_line(aes(group = interaction(policy, run)), alpha = 0.2) +
+  geom_line(data = infm, linewidth = 1.2) +
+  scale_colour_manual(values = pal[c(2, 1)]) +
+  labs(x = "Day", y = "Infected agents (E, I, Severe)", colour = NULL)
+```
+:::
+::::
+
+<!-- 10 runs each; illustrative parameters. Households: groups of four,
+     contact probability 0.3. examples/quarantine.cpp -->
+
+## Statuses over time
+
+```{r}
+#| label: statuses
+#| fig-width: 11
+#| fig-height: 4.4
+st <- fread("results/quarantine.csv")[policy == "detection + tracing" & status != "Free"]
+st <- st[, .(n = sum(count)), by = .(run, date, status, stage)]
+st <- st[, .(n = mean(n)), by = .(date, status, stage)]
+st <- st[date <= 120]
+ggplot(st, aes(date, n, fill = stage)) +
+  geom_area() +
+  facet_wrap(~status, nrow = 1) +
+  scale_fill_manual(values = c(pal, "grey60")) +
+  labs(x = "Day", y = "Agents (mean of 10 runs)", fill = "Stage")
+```
+
+<span class="small">The runs with the policy, by status and stage: quarantined agents are mostly susceptible (traced contacts who were not infected); isolated agents are infected, or recovered before their isolation (7 days from onset) ends. In 0.18, each of these combinations was a separate state.</span>
+
+## 4. Two diseases in one population
+
+:::: {.columns}
+::: {.column width="45%"}
+```cpp
+Virus flu("Influenza");        // SEIR
+// ... stages, lognormal latent period
+model.add_virus(flu, assign::count(10));
+
+Virus flu_b = flu.strain("Influenza B");
+flu_b.use_param("Flu transmission",
+                "Flu B transmission");
+model.add_virus(flu_b, assign::count(5));
+
+Virus rsv("RSV");              // SIR
+// ... its own stages
+model.add_virus(rsv, assign::count(10));
+
+Tool vax("Flu vaccine");
+vax.add_target("Influenza");   // required
+model.add_tool(vax, assign::share(0.3));
+```
+:::
+::: {.column width="55%"}
+```{r}
+#| label: two-diseases
+#| fig-width: 6.5
+#| fig-height: 5.2
+t <- fread("results/two_diseases.csv")
+both <- fread("results/two_diseases_summary.csv")$both
+inf <- t[stage %in% c("Exposed", "Infectious"), .(n = sum(count)), by = .(disease, date)]
+ggplot(inf, aes(date, n, colour = disease)) +
+  geom_line(linewidth = 1.2) +
+  scale_colour_manual(values = pal[c(1, 2)]) +
+  labs(
+    x = "Day", y = "Infected agents", colour = NULL,
+    caption = sprintf("%s agents had both diseases, one after the other", format(both, big.mark = ","))
+  )
+```
+:::
+::::
+
+## Several diseases: the rules
+
+- **One infection per agent at a time.** An agent recovered from influenza can catch RSV; an agent with influenza catches nothing else until it recovers
+- **A copy of a virus is a strain** of its disease (`strain()`); a virus built from scratch is a **new disease**
+- **Each disease has its own records**: every output table has a `disease` column; counts add up to the population in each disease
+- **What one disease could infer must be named**: tools' and layers' targets, `Trigger::entered(s).of("RSV")`, `get_stage(agent, disease)` — otherwise an error says how to fix it
+- **A death in one disease** moves the agent to a built-in "Removed (other disease)" stage in the others
+- With one disease, results are **identical** to before
+
+<!-- Engine: an agent's state combines its status and its stage in every
+     disease; cost with one disease +1 to +3% instructions; 2 and 5 diseases
+     about 26k and 30k instructions per infection (vs 20k). -->
+
+## New infections by strain
+
+```{r}
+#| label: strains
+#| fig-width: 11
+#| fig-height: 4.6
+s <- fread("results/two_diseases_strains.csv")
+s <- s[, .N, by = .(virus, date)]
+ggplot(s, aes(date, N, colour = virus)) +
+  geom_line(linewidth = 1.1) +
+  scale_colour_manual(values = pal[c(1, 4, 2)]) +
+  labs(x = "Day", y = "New infections", colour = NULL)
+```
+
+<span class="small">Influenza B, a strain with a higher transmission probability, outcompetes the founding strain; both are the same disease (the vaccine and the "Recovered" stage cover both). RSV spreads on the same network. <span class="muted">`examples/two_diseases.cpp`</span></span>
+
+## The model's diagram, drawn from its declarations
+
+```{mermaid}
+%%| file: results/two_diseases.mmd
+```
+
+<span class="small">`model.draw_natural_history()`: one subgraph per disease (and one for the statuses, if any); infectious stages in red, carriers in yellow.</span>
+
+## 5. Extending a model from R or Python with C++
+
+```r
+cpp_source_epiworld(code = '
+[[cpp11::register]]
+void add_waning_sirs(SEXP model, double prevalence) {
+  epiworld::Virus flu("Flu");
+  flu.add_stage("Susceptible");
+  flu.add_stage("Infected", epiworld::stage::infectious);
+  flu.add_stage("Recovered");
+  flu.infection(0, 1, "Transmission rate");
+  flu.rate(1, 2, "Recovery rate");
+  flu.rate(2, 0, epiworld::ValueFun(           // immunity wanes after 30 days
+    [](epiworld::Agent & a, epiworld::Model & m) -> epiworld_double {
+      return (m.today() - m.get_stage_entered(a.get_id(), 2) > 30) ? 0.05 : 0.0;
+    }));
+  epiworldR::as_model(model).add_virus(flu, epiworld::assign::share(prevalence));
+}')
+
+model <- ModelSIR("flu", n = 5000, prevalence = .01, transmission_prob = .3, recovery_rate = .1)
+add_waning_sirs(model, 0.01)
+```
+
+- `epiworldR::as_model()` gives C++ the model built in R; Python has the same, `epiworldpy.cpp_source()` and `epiworldpy::as_model()`. Both check the epiworld major version
+
+## The same model, in R, from scratch
+
+```r
+covid <- virus("COVID-19") |>
+  add_stage("Susceptible") |>
+  add_stage("Exposed", carrier = TRUE) |>
+  add_stage("Infected", infectious = TRUE) |>
+  add_stage("Recovered") |>
+  add_stage("Deceased") |>
+  set_contact("Deceased", 0) |>
+  add_infection("Susceptible", "Exposed", rate = "Transmission probability") |>
+  add_after("Exposed", "Infected", duration_geometric("Latent period")) |>
+  add_rate("Infected", "Recovered", rate = "Recovery rate", effect = "recovery") |>
+  add_rate("Infected", "Deceased", rate = "Death rate", effect = "death")
+
+model <- Model(5000) |>
+  add_param("Transmission probability", 0.25) |>
+  add_param("Latent period", 5) |>
+  add_param("Recovery rate", 1 / 7) |>
+  add_param("Death rate", 0.01)
+
+add_virus(model, covid, assign_share(0.01))
+add_layer(model, layer_network("network", graph_smallworld(k = 10, p = 0.01)))
+run(model, ndays = 100, seed = 1912)
+get_hist_transitions(model)
+```
+
+<!-- epiworldR v1-layers, vignette "model-builder". Python has the same
+     builder (Virus.add_stage(...).add_infection(...)). -->
+
+# What's next {background-color="#1f2a44"}
+
+## The road to 1.0.0
+
+| Step | What |
+|---|---|
+| Now | Wrapper ports of several diseases (epiworldR, epiworldpy, epiworldjs, measles), then epiworldRShiny |
+| Phase 4 | Participation by status and layer, layer-targeted tools, schedules (weekdays), persistence |
+| Phase 5 | Push transmission for mixing layers |
+| Phase 6 | Independent exposures as the combination rule; documentation and migration guide |
+| Phase 7 | Measles as presets: the generic sampler on any layers, one contact-tracing intervention in the core |
+| Release | epiworld 1.0.0, then epiworldR, epiworldpy, epiworldjs, measles, epiworldRShiny |
+
+<!-- Phase 7's tracing intervention replaces the four copies of the
+     quarantine loop (SEIR quarantine and the three measles models). -->
+
+## Trying it today
+
+:::: {.columns}
+::: {.column width="52%"}
+### Install
+
+- **C++:** the `v1-layers` branch of `UofUEpiBio/epiworld`; one header, `epiworld.hpp`
+- **R:** `remotes::install_github(` `"UofUEpiBio/epiworldR@v1-layers")`
+- **Python:** `pip install git+https://` `github.com/UofUEpiBio/epiworldpy@v1-layers`
+- **Docs:** `docs/impl/` on the branch: *Natural History and Statuses*, *Extending the Library with Models*
+:::
+::: {.column width="48%"}
+### Migrating from 0.18
+
+- Population size into the constructor; networks and mixing via `add_layer()`
+- `*CONN`, `*Mixing` models: the base model plus a layer
+- `set_distribution()` → `assign::` in `add_virus()`, `add_tool()`
+- `add_state()` + update functions → `add_stage()` + declared transitions
+- `Model<>` → `Model`
+:::
+::::
+
+## Thank you {.center}
+
+<br>
+
+Questions?
+
+<span class="small muted">Slides and examples: `examples/*.cpp` build against the vendored `epiworld.hpp` (`make all`).</span>

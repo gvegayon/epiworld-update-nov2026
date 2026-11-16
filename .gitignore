@@ -1,0 +1,6 @@
+build/
+index_files/
+index.html
+.quarto/
+*_cache/
+.DS_Store
