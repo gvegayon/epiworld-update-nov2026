@@ -26,7 +26,8 @@ results/%.csv: examples/%.cpp vendor/epiworld.hpp
 	$(RUN) sh -c '$(CXX) $(CXXFLAGS) $< -o build/$* && ./build/$*'
 
 # The diagrams are rendered to images with a Chromium-based browser
-QUARTO_CHROMIUM ?= $(wildcard /Applications/Google Chrome.app/Contents/MacOS/Google Chrome)
+CHROME := /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+QUARTO_CHROMIUM ?= $(shell test -x "$(CHROME)" && echo "$(CHROME)")
 export QUARTO_CHROMIUM
 
 slides: $(CSV)
