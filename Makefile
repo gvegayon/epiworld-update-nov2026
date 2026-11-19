@@ -67,6 +67,6 @@ benchmark:
 	Rscript bench/summarize.R "$(BENCH)" "$(BENCH_REF)"
 
 clean:
-	rm -rf build results/*.csv index.html index_files
+	rm -rf build results/*.csv docs
 
 .PHONY: all image results slides slides-container benchmark clean

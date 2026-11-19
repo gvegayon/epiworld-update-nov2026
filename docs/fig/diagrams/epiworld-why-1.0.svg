@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1060" viewBox="0 0 1200 530" role="img"
+     aria-label="Why epiworld 1.0, before and after: one contact structure becomes any number of layers; hand-written update functions become declared natural histories; quarantine by duplicated states becomes status times stage; geometric durations become durations with a shape; one set of states shared by every virus becomes several diseases, each with its own natural history."
+     font-family="Source Sans Pro, Helvetica Neue, Helvetica, Arial, sans-serif" fill="#1f2937">
+  <title>Why epiworld 1.0: what 0.18 made hard, and what 1.0 does</title>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#00707a"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1200" height="530" fill="#ffffff"/>
+
+  <!-- Headers -->
+  <text x="300" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#6b7280">epiworld 0.18</text>
+  <text x="900" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#00707a">epiworld 1.0</text>
+
+  <!-- Cards: left (0.18) and right (1.0), five rows 92px apart -->
+  <g fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5">
+    <rect x="40" y="52" width="520" height="80" rx="10"/>
+    <rect x="40" y="144" width="520" height="80" rx="10"/>
+    <rect x="40" y="236" width="520" height="80" rx="10"/>
+    <rect x="40" y="328" width="520" height="80" rx="10"/>
+    <rect x="40" y="420" width="520" height="80" rx="10"/>
+  </g>
+  <g fill="#eef6f7" stroke="#00707a" stroke-width="1.5">
+    <rect x="640" y="52" width="520" height="80" rx="10"/>
+    <rect x="640" y="144" width="520" height="80" rx="10"/>
+    <rect x="640" y="236" width="520" height="80" rx="10"/>
+    <rect x="640" y="328" width="520" height="80" rx="10"/>
+    <rect x="640" y="420" width="520" height="80" rx="10"/>
+  </g>
+  <g stroke="#00707a" stroke-width="2.5" marker-end="url(#ah)">
+    <line x1="570" y1="92" x2="628" y2="92"/>
+    <line x1="570" y1="184" x2="628" y2="184"/>
+    <line x1="570" y1="276" x2="628" y2="276"/>
+    <line x1="570" y1="368" x2="628" y2="368"/>
+    <line x1="570" y1="460" x2="628" y2="460"/>
+  </g>
+
+  <!-- Row 1: contacts. Left icon: one network (center 110,92) -->
+  <g stroke="#9ca3af" stroke-width="1.5">
+    <line x1="82" y1="78" x2="110" y2="68"/><line x1="110" y1="68" x2="136" y2="82"/>
+    <line x1="82" y1="78" x2="94" y2="108"/><line x1="94" y1="108" x2="128" y2="110"/>
+    <line x1="136" y1="82" x2="128" y2="110"/><line x1="110" y1="68" x2="128" y2="110"/>
+  </g>
+  <g fill="#ffffff" stroke="#6b7280" stroke-width="1.5">
+    <circle cx="82" cy="78" r="6"/><circle cx="110" cy="68" r="6"/><circle cx="136" cy="82" r="6"/>
+    <circle cx="94" cy="108" r="6"/><circle cx="128" cy="110" r="6"/>
+  </g>
+  <text x="175" y="86" font-size="17" font-weight="700">One contact structure</text>
+  <text x="175" y="108" font-size="14" fill="#4b5563">a network or mixing by entities, never both</text>
+  <!-- Right icon: stacked layers (center 710,92) -->
+  <polygon points="676,110 724,110 744,98 696,98" fill="#00707a"/>
+  <polygon points="676,96 724,96 744,84 696,84" fill="#66b0b6" stroke="#ffffff"/>
+  <polygon points="676,82 724,82 744,70 696,70" fill="#b3d8db" stroke="#ffffff"/>
+  <text x="775" y="86" font-size="17" font-weight="700" fill="#00707a">Any number of layers</text>
+  <text x="775" y="108" font-size="14" fill="#1f2937">networks and mixing in one model: home, work, public</text>
+
+  <!-- Row 2: states. Left icon: code -->
+  <text x="110" y="194" text-anchor="middle" font-size="30" font-family="Menlo, Consolas, monospace" fill="#6b7280">&lt;/&gt;</text>
+  <text x="175" y="178" font-size="17" font-weight="700">Hand-written update functions</text>
+  <text x="175" y="200" font-size="14" fill="#4b5563">one per state, with its logic in C++</text>
+  <!-- Right icon: declared stages S -> I -> R -->
+  <g stroke="#00707a" stroke-width="1.5">
+    <rect x="676" y="176" width="18" height="16" rx="3" fill="#ffffff"/>
+    <rect x="702" y="176" width="18" height="16" rx="3" fill="#f8d7da"/>
+    <rect x="728" y="176" width="18" height="16" rx="3" fill="#ffffff"/>
+    <line x1="694" y1="184" x2="701" y2="184"/><line x1="720" y1="184" x2="727" y2="184"/>
+  </g>
+  <text x="775" y="178" font-size="17" font-weight="700" fill="#00707a">Declared natural histories</text>
+  <text x="775" y="200" font-size="14" fill="#1f2937">stages, transitions, durations and rates, on the virus</text>
+
+  <!-- Row 3: quarantine. Left icon: a long list of states -->
+  <g fill="#ffffff" stroke="#9ca3af" stroke-width="1.2">
+    <rect x="84" y="250" width="24" height="7"/><rect x="112" y="250" width="24" height="7"/>
+    <rect x="84" y="260" width="24" height="7"/><rect x="112" y="260" width="24" height="7"/>
+    <rect x="84" y="270" width="24" height="7"/><rect x="112" y="270" width="24" height="7"/>
+    <rect x="84" y="280" width="24" height="7"/><rect x="112" y="280" width="24" height="7"/>
+    <rect x="84" y="290" width="24" height="7"/><rect x="112" y="290" width="24" height="7"/>
+  </g>
+  <text x="175" y="270" font-size="17" font-weight="700">Quarantine by duplicated states</text>
+  <text x="175" y="292" font-size="14" fill="#4b5563">"Quarantined Exposed", "Isolated Recovered", ... (10)</text>
+  <!-- Right icon: a status x stage grid -->
+  <g stroke="#ffffff" stroke-width="1.5">
+    <rect x="688" y="258" width="9" height="9" fill="#b3d8db"/><rect x="697" y="258" width="9" height="9" fill="#b3d8db"/><rect x="706" y="258" width="9" height="9" fill="#b3d8db"/><rect x="715" y="258" width="9" height="9" fill="#b3d8db"/><rect x="724" y="258" width="9" height="9" fill="#b3d8db"/>
+    <rect x="688" y="267" width="9" height="9" fill="#b3d8db"/><rect x="697" y="267" width="9" height="9" fill="#00707a"/><rect x="706" y="267" width="9" height="9" fill="#b3d8db"/><rect x="715" y="267" width="9" height="9" fill="#b3d8db"/><rect x="724" y="267" width="9" height="9" fill="#b3d8db"/>
+    <rect x="688" y="276" width="9" height="9" fill="#b3d8db"/><rect x="697" y="276" width="9" height="9" fill="#b3d8db"/><rect x="706" y="276" width="9" height="9" fill="#b3d8db"/><rect x="715" y="276" width="9" height="9" fill="#b3d8db"/><rect x="724" y="276" width="9" height="9" fill="#b3d8db"/>
+    <rect x="688" y="285" width="9" height="9" fill="#b3d8db"/><rect x="697" y="285" width="9" height="9" fill="#b3d8db"/><rect x="706" y="285" width="9" height="9" fill="#b3d8db"/><rect x="715" y="285" width="9" height="9" fill="#b3d8db"/><rect x="724" y="285" width="9" height="9" fill="#b3d8db"/>
+  </g>
+  <text x="710" y="252" text-anchor="middle" font-size="9" fill="#00707a">stage</text>
+  <text x="682" y="277" text-anchor="middle" font-size="9" fill="#00707a" transform="rotate(-90 682 277)">status</text>
+  <text x="775" y="270" font-size="17" font-weight="700" fill="#00707a">Status × stage</text>
+  <text x="775" y="292" font-size="14" fill="#1f2937">where an agent is, and how sick, apart (5 × 4)</text>
+
+  <!-- Row 4: durations. Left icon: geometric (decaying bars) -->
+  <g fill="#9ca3af">
+    <rect x="80" y="350" width="8" height="40"/><rect x="91" y="362" width="8" height="28"/><rect x="102" y="370" width="8" height="20"/>
+    <rect x="113" y="376" width="8" height="14"/><rect x="124" y="380" width="8" height="10"/><rect x="135" y="383" width="8" height="7"/>
+  </g>
+  <text x="175" y="362" font-size="17" font-weight="700">Geometric durations</text>
+  <text x="175" y="384" font-size="14" fill="#4b5563">memoryless, unless you wrote your own timers</text>
+  <!-- Right icon: a shaped duration (humped bars) -->
+  <g fill="#00707a">
+    <rect x="680" y="382" width="8" height="8"/><rect x="691" y="364" width="8" height="26"/><rect x="702" y="350" width="8" height="40"/>
+    <rect x="713" y="360" width="8" height="30"/><rect x="724" y="374" width="8" height="16"/><rect x="735" y="382" width="8" height="8"/>
+  </g>
+  <text x="775" y="362" font-size="17" font-weight="700" fill="#00707a">Durations with a shape</text>
+  <text x="775" y="384" font-size="14" fill="#1f2937">fixed, geometric, lognormal, gamma, or a function</text>
+
+  <!-- Row 5: diseases. Left icon: two viruses on one shared set of states -->
+  <g stroke="#6b7280" stroke-width="1.5" fill="#ffffff">
+    <rect x="80" y="462" width="18" height="14" rx="3"/><rect x="104" y="462" width="18" height="14" rx="3"/><rect x="128" y="462" width="18" height="14" rx="3"/>
+  </g>
+  <g stroke="#9ca3af" stroke-width="1.2">
+    <line x1="100" y1="446" x2="110" y2="460"/><line x1="122" y1="446" x2="114" y2="460"/>
+  </g>
+  <circle cx="98" cy="442" r="5" fill="#f8d7da" stroke="#b02a37"/>
+  <circle cx="124" cy="442" r="5" fill="#fff3cd" stroke="#997404"/>
+  <text x="175" y="454" font-size="17" font-weight="700">One set of states for every virus</text>
+  <text x="175" y="476" font-size="14" fill="#4b5563">recovered from one virus: recovered from all</text>
+  <!-- Right icon: two diseases, each its own track -->
+  <g stroke-width="1.5">
+    <circle cx="672" cy="450" r="5" fill="#f8d7da" stroke="#b02a37"/>
+    <rect x="684" y="443" width="16" height="13" rx="3" fill="#ffffff" stroke="#b02a37"/><rect x="706" y="443" width="16" height="13" rx="3" fill="#f8d7da" stroke="#b02a37"/><rect x="728" y="443" width="16" height="13" rx="3" fill="#ffffff" stroke="#b02a37"/>
+    <circle cx="672" cy="471" r="5" fill="#fff3cd" stroke="#997404"/>
+    <rect x="684" y="464" width="16" height="13" rx="3" fill="#ffffff" stroke="#997404"/><rect x="706" y="464" width="16" height="13" rx="3" fill="#fff3cd" stroke="#997404"/><rect x="728" y="464" width="16" height="13" rx="3" fill="#ffffff" stroke="#997404"/>
+  </g>
+  <text x="775" y="454" font-size="17" font-weight="700" fill="#00707a">Several diseases</text>
+  <text x="775" y="476" font-size="14" fill="#1f2937">each with its own natural history and records</text>
+</svg>

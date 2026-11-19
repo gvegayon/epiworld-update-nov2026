@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="840" viewBox="0 0 1200 420" role="img"
+     aria-label="The road to epiworld 1.0.0: done are Phase 0 (benchmark of the combination rule, October 19), Phases 1 and 2 (layer interface, mixing and network layers, October 21), Phase 3 (several layers in one model, entities removed, October 21 to November 2), natural histories (November 6 to 10), several diseases (November 11 to 17) and Phase 4 (participation, layer-targeted tools, schedules, persistence, November 18 to 19); next are Phase 5 (push transmission for mixing layers), Phase 6 (independent exposures, docs), Phase 7 (measles as presets) and the 1.0.0 release."
+     font-family="Source Sans Pro, Helvetica Neue, Helvetica, Arial, sans-serif" fill="#1f2937">
+  <title>The road to epiworld 1.0.0</title>
+  <!-- Source: epiworld v1-layers, contact-layers.md (6. Branching and
+       phases; 11.6 Status), and the merge dates of the phase PRs. -->
+  <rect x="0" y="0" width="1200" height="420" fill="#ffffff"/>
+
+  <!-- Track: done (teal) up to today, then to do (dashed) -->
+  <line x1="70" y1="170" x2="697" y2="170" stroke="#00707a" stroke-width="5" stroke-linecap="round"/>
+  <line x1="697" y1="170" x2="1096" y2="170" stroke="#9ca3af" stroke-width="3" stroke-dasharray="8 6"/>
+
+  <!-- Today -->
+  <line x1="697" y1="70" x2="697" y2="330" stroke="#c0491f" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <rect x="652" y="44" width="90" height="24" rx="12" fill="#c0491f"/>
+  <text x="697" y="61" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">today</text>
+
+  <!-- Done: filled nodes with a check -->
+  <g fill="#00707a" stroke="#ffffff" stroke-width="2">
+    <circle cx="70" cy="170" r="15"/><circle cx="184" cy="170" r="15"/><circle cx="298" cy="170" r="15"/>
+    <circle cx="412" cy="170" r="15"/><circle cx="526" cy="170" r="15"/><circle cx="640" cy="170" r="15"/>
+  </g>
+  <g fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M63,170 L68,175 L77,164"/><path d="M177,170 L182,175 L191,164"/><path d="M291,170 L296,175 L305,164"/>
+    <path d="M405,170 L410,175 L419,164"/><path d="M519,170 L524,175 L533,164"/><path d="M633,170 L638,175 L647,164"/>
+  </g>
+
+  <!-- To do: open nodes; the release, a diamond -->
+  <g fill="#ffffff" stroke="#6b7280" stroke-width="2">
+    <circle cx="754" cy="170" r="13"/><circle cx="868" cy="170" r="13"/><circle cx="982" cy="170" r="13"/>
+  </g>
+  <polygon points="1096,150 1116,170 1096,190 1076,170" fill="#ffffff" stroke="#c0491f" stroke-width="2.5"/>
+
+  <!-- Titles and dates (above) -->
+  <g text-anchor="middle">
+    <g font-size="15" font-weight="700" fill="#00707a">
+      <text x="70" y="114">Phase 0</text><text x="184" y="114">Phases 1–2</text><text x="298" y="114">Phase 3</text>
+      <text x="412" y="114">Natural</text><text x="526" y="114">Several</text><text x="640" y="114">Phase 4</text>
+    </g>
+    <g font-size="15" font-weight="700" fill="#00707a">
+      <text x="412" y="131">histories</text><text x="526" y="131">diseases</text>
+    </g>
+    <g font-size="15" font-weight="700" fill="#4b5563">
+      <text x="754" y="114">Phase 5</text><text x="868" y="114">Phase 6</text><text x="982" y="114">Phase 7</text>
+    </g>
+    <text x="1096" y="114" font-size="15" font-weight="700" fill="#c0491f">1.0.0</text>
+    <g font-size="13" fill="#6b7280">
+      <text x="70" y="140">Oct 19</text><text x="184" y="140">Oct 21</text><text x="298" y="140">Oct 21–Nov 2</text>
+      <text x="412" y="148">Nov 6–10</text><text x="526" y="148">Nov 11–17</text><text x="640" y="140">Nov 18–19</text>
+      <text x="754" y="140">next</text><text x="1096" y="140">release</text>
+    </g>
+  </g>
+
+  <!-- What each phase brings (below) -->
+  <g font-size="14" text-anchor="middle">
+    <text x="70" y="212">benchmark</text><text x="70" y="229">combination</text><text x="70" y="246">rule</text>
+
+    <text x="184" y="212">a layer</text><text x="184" y="229">interface;</text><text x="184" y="246">mixing, network</text><text x="184" y="263">layers</text>
+
+    <text x="298" y="212">several layers</text><text x="298" y="229">in one model;</text><text x="298" y="246">entities</text><text x="298" y="263">removed</text>
+
+    <text x="412" y="212">stages, statuses,</text><text x="412" y="229">reactions;</text><text x="412" y="246">variants by id;</text><text x="412" y="263">diagrams</text>
+
+    <text x="526" y="212">one infection</text><text x="526" y="229">per agent;</text><text x="526" y="246">outputs by</text><text x="526" y="263">disease</text>
+
+    <text x="640" y="212">participation,</text><text x="640" y="229">tools by layer,</text><text x="640" y="246">schedules,</text><text x="640" y="263">persistence</text>
+  </g>
+  <g font-size="14" text-anchor="middle" fill="#4b5563">
+    <text x="754" y="212">push</text><text x="754" y="229">transmission</text><text x="754" y="246">for mixing</text><text x="754" y="263">layers</text>
+
+    <text x="868" y="212">independent</text><text x="868" y="229">exposures;</text><text x="868" y="246">docs; migration</text><text x="868" y="263">guide</text>
+
+    <text x="982" y="212">measles as</text><text x="982" y="229">presets; one</text><text x="982" y="246">tracing</text><text x="982" y="263">intervention</text>
+
+    <text x="1096" y="212">epiworld, then</text><text x="1096" y="229">epiworldR,</text><text x="1096" y="246">epiworldpy,</text><text x="1096" y="263">epiworldjs,</text><text x="1096" y="280">measles,</text><text x="1096" y="297">epiworldRShiny</text>
+  </g>
+
+  <!-- How each phase lands -->
+  <rect x="40" y="350" width="1120" height="46" rx="10" fill="#eef6f7" stroke="#b3d8db"/>
+  <text x="600" y="378" text-anchor="middle" font-size="14" fill="#1f2937">Each phase is ported to the wrappers (epiworldR, epiworldpy, epiworldjs, measles) and rerun in epiworld-benchmark before the next one starts</text>
+</svg>

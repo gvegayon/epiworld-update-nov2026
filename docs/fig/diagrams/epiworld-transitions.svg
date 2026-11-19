@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="760" viewBox="0 60 1200 380" role="img"
+     aria-label="The four kinds of transitions in an epiworld 1.0 natural history, on a flu model: infection(S, E, p) moves a susceptible agent to exposed when a contact transmits, checked daily over every layer; after(E, I, d) moves exposed to infected when a duration, drawn once on entering E, ends; rate(I, R, p) and rate(I, H, p) are daily probabilities that compete, one draw a day picking one or none; external({E, I}, R, name) moves exposed or infected agents to recovered when code fires it with model.fire()."
+     font-family="Source Sans Pro, Helvetica Neue, Helvetica, Arial, sans-serif" fill="#1f2937">
+  <title>Four kinds of transitions</title>
+  <!-- Read from epiworld v1-layers: Virus::infection(), after(), rate(),
+       external(); Model::nh_step() and Model::fire(). -->
+  <defs>
+    <marker id="ah-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b02a37"/>
+    </marker>
+    <marker id="ah-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+    <marker id="ah-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#00707a"/>
+    </marker>
+    <marker id="ah-rust" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c0491f"/>
+    </marker>
+  </defs>
+  <rect x="0" y="60" width="1200" height="380" fill="#ffffff"/>
+
+  <!-- external: dashed arcs into R (E's arc outside I's, so they nest) -->
+  <g fill="none" stroke="#c0491f" stroke-width="2.5" stroke-dasharray="7 5">
+    <path d="M390,218 C390,110 1050,110 1050,216" marker-end="url(#ah-rust)"/>
+    <path d="M670,218 C670,160 1010,160 1010,216" marker-end="url(#ah-rust)"/>
+  </g>
+  <!-- lightning -->
+  <polygon points="606,82 594,104 603,104 597,122 614,96 604,96 611,82" fill="#c0491f"/>
+  <text x="624" y="100" font-size="14" font-family="Menlo, Consolas, monospace" fill="#c0491f" font-weight="700">external({E, I}, R, name)</text>
+  <text x="624" y="118" font-size="13" fill="#4b5563">when code fires it: <tspan font-family="Menlo, Consolas, monospace" font-size="12">model.fire()</tspan></text>
+
+  <!-- Stages -->
+  <g stroke-width="1.5">
+    <rect x="50" y="220" width="120" height="60" rx="30" fill="#ffffff" stroke="#6b7280"/>
+    <rect x="330" y="220" width="120" height="60" rx="30" fill="#fff3cd" stroke="#997404"/>
+    <rect x="610" y="220" width="120" height="60" rx="30" fill="#f8d7da" stroke="#b02a37"/>
+    <rect x="970" y="220" width="120" height="60" rx="30" fill="#e0f0f1" stroke="#00707a"/>
+    <rect x="970" y="360" width="120" height="60" rx="30" fill="#eef0f3" stroke="#6b7280"/>
+  </g>
+  <g text-anchor="middle" font-size="15" font-weight="700">
+    <text x="110" y="255">Susceptible</text>
+    <text x="390" y="255">Exposed</text>
+    <text x="670" y="255">Infected</text>
+    <text x="1030" y="255">Recovered</text>
+    <text x="1030" y="395">Hospitalized</text>
+  </g>
+
+  <!-- infection: S -> E -->
+  <line x1="172" y1="250" x2="326" y2="250" stroke="#b02a37" stroke-width="3" marker-end="url(#ah-red)"/>
+  <!-- icon: two agents in contact -->
+  <g fill="#b02a37" transform="translate(250,188) scale(1.5) translate(-250,-188)">
+    <circle cx="238" cy="178" r="5"/><path d="M229,198 Q238,184 247,198 z"/>
+    <circle cx="262" cy="178" r="5"/><path d="M253,198 Q262,184 271,198 z"/>
+  </g>
+  <text x="250" y="232" text-anchor="middle" font-size="13" font-family="Menlo, Consolas, monospace" font-weight="700" fill="#b02a37">infection(S, E, p)</text>
+  <g text-anchor="middle" font-size="13" fill="#4b5563">
+    <text x="250" y="274">a contact transmits;</text>
+    <text x="250" y="291">daily, over every layer</text>
+  </g>
+
+  <!-- after: E -> I -->
+  <line x1="452" y1="250" x2="606" y2="250" stroke="#4b5563" stroke-width="3" marker-end="url(#ah-gray)"/>
+  <!-- icon: hourglass -->
+  <g transform="translate(530,186) scale(1.4) translate(-530,-186)">
+  <g fill="none" stroke="#4b5563" stroke-width="2" stroke-linejoin="round">
+    <line x1="519" y1="172" x2="541" y2="172"/><line x1="519" y1="200" x2="541" y2="200"/>
+    <path d="M522,172 L538,172 L530,186 L538,200 L522,200 L530,186 z"/>
+  </g>
+  <path d="M525,200 L535,200 L530,192 z" fill="#4b5563"/>
+  </g>
+  <text x="530" y="232" text-anchor="middle" font-size="13" font-family="Menlo, Consolas, monospace" font-weight="700" fill="#374151">after(E, I, d)</text>
+  <g text-anchor="middle" font-size="13" fill="#4b5563">
+    <text x="530" y="274">when duration d ends;</text>
+    <text x="530" y="291">drawn once, on entry</text>
+  </g>
+
+  <!-- rate: I -> R and I -> H, competing -->
+  <line x1="732" y1="250" x2="966" y2="250" stroke="#00707a" stroke-width="3" marker-end="url(#ah-teal)"/>
+  <path d="M670,282 L670,390 L966,390" fill="none" stroke="#00707a" stroke-width="3" marker-end="url(#ah-teal)"/>
+  <text x="850" y="240" text-anchor="middle" font-size="13" font-family="Menlo, Consolas, monospace" font-weight="700" fill="#00707a">rate(I, R, p)</text>
+  <text x="820" y="380" text-anchor="middle" font-size="13" font-family="Menlo, Consolas, monospace" font-weight="700" fill="#00707a">rate(I, H, p)</text>
+  <!-- icon: a die -->
+  <rect x="696" y="306" width="24" height="24" rx="5" fill="#ffffff" stroke="#00707a" stroke-width="2"/>
+  <g fill="#00707a">
+    <circle cx="702" cy="312" r="2.2"/><circle cx="708" cy="318" r="2.2"/><circle cx="714" cy="324" r="2.2"/>
+  </g>
+  <g font-size="13" fill="#4b5563">
+    <text x="732" y="308">daily probabilities that compete:</text>
+    <text x="732" y="325">one draw a day picks one, or none;</text>
+    <text x="732" y="342">a tool can change them</text>
+  </g>
+</svg>

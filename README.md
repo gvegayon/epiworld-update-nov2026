@@ -32,7 +32,7 @@ About 30 minutes.
 ```sh
 make results   # compile and run the examples (in the epiworld devcontainer
                # image, localhost/epiworld-dev, if podman or docker is there)
-make slides    # quarto render index.qmd -> index.html
+make slides    # quarto render index.qmd -> docs/index.html
 make slides-container  # the same, always in the image (an error if none)
 make all       # both
 ```
@@ -54,6 +54,12 @@ make image     # podman/docker build -> localhost/epiworld-dev
 
 `make results` runs the examples in that image. `make slides` renders the slides
 in it too (no R, Quarto or Chrome needed on the host).
+
+## GitHub Pages
+
+The Quarto project renders to `docs/`, which is committed for GitHub Pages.
+In the repository settings, select **Deploy from a branch**, then choose the
+deployment branch and its `/docs` folder.
 
 To update epiworld, replace `vendor/epiworld.hpp` with the amalgam
 (`./epiworld.hpp`) of a newer `v1-layers` commit, update `vendor/VERSION`, and
