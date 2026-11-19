@@ -739,12 +739,12 @@ seir <- function(shaped) {
 #| output: false
 simulate_durations <- function(shaped) {
   model <- Model(20000) |>
-    add_param("Transmission probability", 0.04)
-  add_virus(model, seir(shaped), assign_count(20))
-  add_layer(
-    model,
-    layer_network("contacts", graph_smallworld(10, 0.05))
-  )
+    add_param("Transmission probability", 0.04) |>
+    add_virus(seir(shaped), assign_count(20)) |>
+    add_layer(
+      layer_network("contacts", graph_smallworld(10, 0.05))
+    )
+    
   run_multiple(
     model,
     ndays = 365,

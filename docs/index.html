@@ -919,8 +919,8 @@ Population size     : 20000
 Agents' data        : (none)
 Days (duration)     : 150 (of 150)
 Number of viruses   : 1
-Last run elapsed t  : 112.00ms
-Last run speed      : 26.58 million agents x day / second
+Last run elapsed t  : 130.00ms
+Last run speed      : 22.90 million agents x day / second
 Contact layers      : 3
   - household
   - work (network)
@@ -987,12 +987,12 @@ Distribution of the population at time 150:
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="" aria-hidden="true" tabindex="-1"></a>simulate_durations <span class="ot">&lt;-</span> <span class="cf">function</span>(shaped) {</span>
 <span id="cb19-2"><a href="" aria-hidden="true" tabindex="-1"></a>  model <span class="ot">&lt;-</span> <span class="fu">Model</span>(<span class="dv">20000</span>) <span class="sc">|&gt;</span></span>
-<span id="cb19-3"><a href="" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add_param</span>(<span class="st">"Transmission probability"</span>, <span class="fl">0.04</span>)</span>
-<span id="cb19-4"><a href="" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_virus</span>(model, <span class="fu">seir</span>(shaped), <span class="fu">assign_count</span>(<span class="dv">20</span>))</span>
-<span id="cb19-5"><a href="" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_layer</span>(</span>
-<span id="cb19-6"><a href="" aria-hidden="true" tabindex="-1"></a>    model,</span>
-<span id="cb19-7"><a href="" aria-hidden="true" tabindex="-1"></a>    <span class="fu">layer_network</span>(<span class="st">"contacts"</span>, <span class="fu">graph_smallworld</span>(<span class="dv">10</span>, <span class="fl">0.05</span>))</span>
-<span id="cb19-8"><a href="" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb19-3"><a href="" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add_param</span>(<span class="st">"Transmission probability"</span>, <span class="fl">0.04</span>) <span class="sc">|&gt;</span></span>
+<span id="cb19-4"><a href="" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add_virus</span>(<span class="fu">seir</span>(shaped), <span class="fu">assign_count</span>(<span class="dv">20</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb19-5"><a href="" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add_layer</span>(</span>
+<span id="cb19-6"><a href="" aria-hidden="true" tabindex="-1"></a>      <span class="fu">layer_network</span>(<span class="st">"contacts"</span>, <span class="fu">graph_smallworld</span>(<span class="dv">10</span>, <span class="fl">0.05</span>))</span>
+<span id="cb19-7"><a href="" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb19-8"><a href="" aria-hidden="true" tabindex="-1"></a>    </span>
 <span id="cb19-9"><a href="" aria-hidden="true" tabindex="-1"></a>  <span class="fu">run_multiple</span>(</span>
 <span id="cb19-10"><a href="" aria-hidden="true" tabindex="-1"></a>    model,</span>
 <span id="cb19-11"><a href="" aria-hidden="true" tabindex="-1"></a>    <span class="at">ndays =</span> <span class="dv">365</span>,</span>
@@ -1286,8 +1286,8 @@ Population size     : 20000
 Agents' data        : (none)
 Days (duration)     : 250 (of 250)
 Number of viruses   : 3
-Last run elapsed t  : 64.00ms
-Last run speed      : 76.98 million agents x day / second
+Last run elapsed t  : 66.00ms
+Last run speed      : 75.53 million agents x day / second
 Contact layers      : 1
   - contacts (network)
 Last seed used      : 15
