@@ -7,6 +7,7 @@
 
 using namespace epiworld;
 
+// slide-begin
 static Virus seir(bool shaped)
 {
     Virus v("Flu");
@@ -27,6 +28,7 @@ static Virus seir(bool shaped)
     }
     return v;
 }
+    // slide-end
 
 int main()
 {
@@ -37,11 +39,13 @@ int main()
     for (bool shaped : {false, true})
     {
 
+        // slide-begin
         Model model(20000u);
         model.verbose_off();
         model.add_param(0.04, "Transmission probability");
         model.add_virus(seir(shaped), assign::count(20));
         model.add_layer(layer::network("contacts", graph::smallworld(10, 0.05)));
+        // slide-end
 
         for (int run = 0; run < 20; ++run)
         {

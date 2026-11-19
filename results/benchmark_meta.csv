@@ -1,0 +1,15 @@
+engine,engine_version,ref,commit
+ABM,0.4.3,origin/v1-layers,0278889e
+Agents.jl,7.0.4,origin/v1-layers,0278889e
+EoN,1.92,origin/v1-layers,0278889e
+EpiModel,2.5.0,origin/v1-layers,0278889e
+FRED,PUB.5.7.0+gbd25f04,origin/v1-layers,0278889e
+covasim,3.1.8,origin/v1-layers,0278889e
+epiworld,0.17.1+g04c4ad8,origin/v1-layers,0278889e
+epiworld-v1,1.0.0+ga4cb34d,origin/v1-layers,0278889e
+epiworldR,0.17.1.0+gfca60f3,origin/v1-layers,0278889e
+epiworldpy,0.17.1-0+gc24b4f9,origin/v1-layers,0278889e
+epydemic,1.14.1,origin/v1-layers,0278889e
+individual,0.1.19,origin/v1-layers,0278889e
+ixa,3.1.0,origin/v1-layers,0278889e
+starsim,3.6.1,origin/v1-layers,0278889e

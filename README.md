@@ -6,9 +6,18 @@ About 30 minutes.
 
 - `index.qmd`: the slides. Comments in the file (`<!-- -->`) hold notes and
   sources; there are no speaker notes.
-- `examples/*.cpp`: the runs behind the plots of the "New capabilities"
-  part, built against `vendor/epiworld.hpp` (the `v1-layers` amalgam; the
-  commit is in `vendor/VERSION`). Each writes CSVs to `results/`.
+  The four examples of the "New capabilities" part are R (epiworldR 1.0), run
+  when the slides render: each has a slide with the code, a slide with its
+  output (a `summary()` and a plot), and a link to its C++ equivalent in the
+  appendix (and a `<go back>` link there).
+- `examples/*.cpp`: those four examples in C++, built against
+  `vendor/epiworld.hpp` (the `v1-layers` amalgam; the commit is in
+  `vendor/VERSION`). Each writes CSVs to `results/`. The appendix shows the
+  parts between `// slide-begin` and `// slide-end`, read from these files.
+- `bench/summarize.R`: the numbers of the benchmark slides
+  (`results/benchmark_*.csv`), from the `v1-layers` branch of
+  epiworld-benchmark, with that repository's own definitions of time,
+  memory and model lines. `make benchmark` refreshes them.
 - `styles.scss`: the theme.
 
 ## Building
@@ -17,10 +26,13 @@ About 30 minutes.
 make results   # compile and run the examples (in the epiworld devcontainer
                # image, localhost/epiworld-dev, if podman or docker is there)
 make slides    # quarto render index.qmd -> index.html
+make slides-container  # the same, always in the image (an error if none)
 make all       # both
 ```
 
-The slides need R with ggplot2 and data.table.
+The slides need R with epiworldR 1.0, ggplot2 and data.table; the
+devcontainer image has them. `make slides` renders in the image when
+podman or docker is there.
 
 ## Devcontainer
 
@@ -33,12 +45,8 @@ Quarto and a headless Chromium for the diagrams. Open the folder in VS Code
 make image     # podman/docker build -> localhost/epiworld-dev
 ```
 
-`make results` runs the examples in that image. To render the slides in it as
-well (no Chrome needed on the host):
-
-```sh
-podman run --rm -v "$PWD":"$PWD" -w "$PWD" localhost/epiworld-dev quarto render index.qmd
-```
+`make results` runs the examples in that image. `make slides` renders the slides
+in it too (no R, Quarto or Chrome needed on the host).
 
 To update epiworld, replace `vendor/epiworld.hpp` with the amalgam
 (`./epiworld.hpp`) of a newer `v1-layers` commit, update `vendor/VERSION`, and

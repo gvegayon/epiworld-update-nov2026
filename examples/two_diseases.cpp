@@ -11,6 +11,7 @@ using namespace epiworld;
 int main()
 {
 
+    // slide-begin
     const size_t n = 20000u;
     Model model(n);
     model.verbose_off();
@@ -34,7 +35,9 @@ int main()
     Virus flu_b = flu.strain("Influenza B");
     flu_b.use_param("Flu transmission", "Flu B transmission");
     model.add_virus(flu_b, assign::count(5));
+    // slide-end
 
+    // slide-begin
     // RSV: SIR, about ten days infectious; a different disease
     Virus rsv("RSV");
     const int rS = rsv.add_stage("Susceptible");
@@ -51,6 +54,7 @@ int main()
     model.add_tool(vax, assign::share(0.3));
 
     model.run(250, 15);
+    // slide-end
 
     // The diagram, drawn from the declarations (both diseases and statuses)
     std::ofstream("results/two_diseases.mmd") << model.draw_natural_history();

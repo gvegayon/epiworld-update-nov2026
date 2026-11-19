@@ -12,6 +12,7 @@ using namespace epiworld;
 int main()
 {
 
+    // slide-begin
     const size_t n = 20000u;
     epimodels::ModelSEIR model("Flu", n, 0.001, 0.02, 4.0, 1.0 / 7.0);
     model.verbose_off();
@@ -27,7 +28,9 @@ int main()
 
     // Work: the same coworkers every day
     model.add_layer(layer::network("work", graph::smallworld(10, 0.05)));
+    // slide-end
 
+    // slide-begin
     // Public spaces: strangers, by age group
     auto pub = layer::mixing("public");
     pub->set_groups(assign::shares({{0, 0.25}, {1, 0.5}, {2, 0.25}}), 3u);
@@ -39,6 +42,7 @@ int main()
     model.add_param(4.0, "Public contact rate");
     pub->set_contact_rate("Public contact rate");
     model.add_layer(pub);
+    // slide-end
 
     model.run(150, 2131);
 

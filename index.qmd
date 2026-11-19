@@ -8,10 +8,17 @@ format:
     theme: [default, styles.scss]
     slide-number: true
     code-line-numbers: false
-    highlight-style: github
+    highlight-style: espresso
+    # `#` section dividers nest their `##` slides vertically; linear navigation
+    # makes the arrow keys walk every slide in order.
+    navigation-mode: linear
+    title-slide-attributes:
+      data-background-image: 'fig/Zoom-Background_PrideU.jpg'
+      data-background-opacity: '0.1'
+      data-background-size: 'contain'
     width: 1280
     height: 720
-    footer: "epiworld 1.0 · UofUEpiBio"
+    footer: "George G. Vega Yon -- epiworld 1.0 -- <https://ggvy.cl>"
     mermaid-format: png
     mermaid:
       theme: neutral
@@ -25,11 +32,76 @@ execute:
 #| label: setup
 library(ggplot2)
 library(data.table)
+library(epiworldR)
+dir.create("build", showWarnings = FALSE)
+
+# summary(model) without its empty sections (or only some: `only`, a regex
+# on a section's first line; `zero = FALSE` hides all-zero rows), for a slide
+summary_brief <- function(
+    model,
+    drop = c("Global events", "Tool\\(s\\)", "Transition Probabilities"),
+    only = NULL,
+    zero = TRUE
+) {
+  out    <- capture.output(summary(model))
+  if (!zero)
+    out <- out[!grepl(": +0 -> 0$", out)]
+  blocks <- split(out, cumsum(out == ""))
+  blocks <- lapply(blocks, function(b) b[b != "" & !grepl("^_+$", b)])
+  keep   <- vapply(
+    blocks,
+    function(b) {
+      length(b) > 0 &&
+        !grepl(paste(drop, collapse = "|"), b[1]) &&
+        (is.null(only) || grepl(only, b[1]))
+    },
+    logical(1)
+  )
+  cat(unlist(lapply(blocks[keep], c, "")), sep = "\n")
+}
+
+# The C++ behind a slide: the parts of an example between its
+# `// slide-begin` and `// slide-end` markers, one column each
+cpp_blocks <- function(
+    file,
+    widths = NULL
+) {
+  x     <- readLines(file)
+  begin <- grep("// slide-begin", x, fixed = TRUE)
+  end   <- grep("// slide-end", x, fixed = TRUE)
+  if (is.null(widths))
+    widths <- rep(floor(100 / length(begin)), length(begin))
+  cat(":::: {.columns}\n")
+  for (i in seq_along(begin)) {
+    code   <- x[(begin[i] + 1):(end[i] - 1)]
+    indent <- min(nchar(sub("^( *).*", "\\1", code[code != ""])))
+    cat(
+      sprintf("::: {.column width=\"%d%%\"}\n", widths[i]),
+      "```cpp\n",
+      paste(substring(code, indent + 1), collapse = "\n"),
+      "\n```\n:::\n",
+      sep = ""
+    )
+  }
+  cat("::::\n")
+}
 theme_set(
   theme_minimal(base_size = 16) +
     theme(legend.position = "top", panel.grid.minor = element_blank())
 )
-pal <- c("#1f2a44", "#b02a37", "#d39e00", "#2a9d8f")
+# The theme's accent (teal) and its "results" rust lead; then gold and navy
+# epiworld 1.0 over 0.17.1 in the benchmark, across its 8 scenario sizes
+bench_range <- function(what) {
+  r <- dcast(
+    fread("results/benchmark_runs.csv")[engine %in% c("epiworld", "epiworld-v1")],
+    scenario + n ~ engine,
+    value.var = what
+  )
+  x <- r[["epiworld-v1"]] / r[["epiworld"]]
+  sprintf("%.2f–%.2f", min(x), max(x))
+}
+
+pal <- c("#00707a", "#c0491f", "#d39e00", "#1f2a44")
 ```
 
 <!--
@@ -39,8 +111,11 @@ pal <- c("#1f2a44", "#b02a37", "#d39e00", "#2a9d8f")
   3. New capabilities, with runs (slides 18-28)
   Then what is next.
 
-  The examples' results come from examples/*.cpp, built against the vendored
-  epiworld v1-layers header (vendor/VERSION): `make results`.
+  The four examples of "New capabilities" are R, run when the slides render
+  (epiworldR 1.0). Their C++ equivalents are in the appendix, taken from
+  examples/*.cpp (between the `// slide-begin` and `// slide-end` markers) and
+  built against the vendored epiworld v1-layers header (vendor/VERSION):
+  `make results`.
 -->
 
 ## Where we are
@@ -104,7 +179,7 @@ the SEIR quarantine model: 10 hand-written states became 5 stages × 4 statuses,
 ::: {.column width="33%"}
 [≈ 1.0×]{.big-number}
 
-simulation time against 0.x on the benchmark scenarios (1.00–1.12), with less memory
+simulation time against 0.17.1 on the benchmark scenarios (`r bench_range("simulate")`), with less memory (`r bench_range("peak")`)
 :::
 ::::
 
@@ -115,7 +190,36 @@ simulation time against 0.x on the benchmark scenarios (1.00–1.12), with less 
 
 <!-- Memory: peak 0.57-0.96 of 0.x in the NH-5b-2 rerun (epiworld-benchmark #40). -->
 
-# Before and after {background-color="#1f2a44"}
+## epiworld 1.0 among other engines
+
+::: {.feature-table}
+| Feature | epiworld 0.18 | **epiworld 1.0** | Covasim | Starsim | EoN | epydemic | ixa | individual | ABM | EpiModel | FRED | Agents.jl |
+|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| Language | C++, R, Py | C++, R, Py | Python | Python | Python | Python | Rust | R | R | R | C++ | Julia |
+| Ready-made disease models | ● | ● | ● | ● | ● | ● | ○ | ○ | ○ | ● | ● | ○ |
+| User-defined states, transitions | ● | ● | ◐ | ● | ● | ● | ◐ | ◐ | ● | ● | ● | ◐ |
+| Continuous-time simulation | ○ | ○ | ○ | ○ | ● | ● | ● | ○ | ● | ○ | ○ | ◐† |
+| Network from an edge list | ● | ● | ● | ● | ● | ● | ● | ◐ | ◐ | ◐ | ◐ | ◐ |
+| Vaccination | ● | ● | ● | ● | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ● | ◐ |
+| Layered contacts | ◐† | [●]{.chg} | ●† | ◐† | ○ | ◐† | ◐† | ◐† | ◐† | ●† | ●† | ◐† |
+| Age and other attributes | ◐† | ◐† | ●† | ●† | ◐† | ◐† | ●† | ●† | ●† | ●† | ●† | ●† |
+| Demography | ◐† | ◐† | ◐† | ●† | ○ | ◐† | ◐† | ◐† | ●† | ●† | ◐† | ◐† |
+| Movement in space | ○ | ○ | ○ | ○ | ○ | ○ | ◐† | ◐† | ◐† | ○ | ◐† | ●† |
+| Testing, tracing, quarantine | ●† | ●† | ●† | ◐† | ○ | ◐† | ◐† | ◐† | ◐† | ◐† | ◐† | ◐† |
+| Several pathogens or variants | ◐† | [●]{.chg}† | ●† | ●† | ◐† | ◐† | ◐† | ◐† | ◐† | ◐† | ●† | ◐† |
+| Built-in calibration | ●† | ●† | ●† | ●† | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ◐† |
+:::
+
+<span class="small">● provides it; ◐ possible with the user's own code; ○ not provided; † not tested by the benchmark. Highlighted: what 1.0 adds, **a model with several layers** (0.18: a network *or* mixing) and **several diseases**, each with its own natural history (0.18: variants of one). <span class="muted">Other engines: the feature table of epiworld-benchmark (their documentation, not a systematic review).</span></span>
+
+<!-- Source: epiworld-benchmark, docs/engines.md ("Feature summary"), branch
+     v1-layers, where epiworld is one "epiworld family" column. Split here:
+     0.18 keeps the family's marks except layered contacts (the family's mark
+     came from entities; a 0.18 model has one contact structure) and several
+     pathogens (0.18 viruses share the model's states: variants of one
+     disease). -->
+
+# Part 1 -- Before and after {background-color="#00707a"}
 
 ## Hello world
 
@@ -529,46 +633,92 @@ model.react(Trigger::entered(INFECTED).was({quarantined}), onset_q);
      db.get_hist_transitions(date, transition, counts);
      db.get_transition_probability(Margin::stage, model.disease_id("Flu")); -->
 
-## Performance
+# Part 2 -- New capabilities {background-color="#00707a"}
 
+## 1. Households, work and public spaces, in one model {#r-layers .ex}
+
+:::: {.columns}
+::: {.column width="50%"}
 ```{r}
-#| label: performance
-#| fig-width: 11
-#| fig-height: 4.6
-perf <- data.table(
-  scenario = c(
-    "00 · 10,000", "00 · 100,000", "01 · 10,000", "01 · 100,000",
-    "02 · 10,000", "02 · 100,000", "03 · 1,000,000", "04 · 165,865 (GeoPops)"
-  ),
-  simulate = c(1.11, 1.12, 1.09, 1.00, 1.09, 1.01, 1.03, 1.08),
-  build    = c(0.84, 0.80, 0.84, 0.80, 0.84, 0.80, 0.81, 0.88),
-  memory   = c(0.80, 0.77, 0.91, 0.87, 0.96, 0.88, 0.72, 0.57)
+#| label: layers-code-1
+#| echo: true
+#| output: false
+n <- 20000
+
+model <- ModelSEIR(
+  name              = "Flu",
+  n                 = n,
+  prevalence        = 0.001,
+  transmission_prob = 0.02,
+  latent_period     = 4,
+  recovery_rate     = 1 / 7
 )
-perf <- melt(perf, id.vars = "scenario", variable.name = "measure", value.name = "ratio")
-perf[, scenario := factor(scenario, levels = rev(unique(scenario)))]
-ggplot(perf, aes(ratio, scenario, colour = measure)) +
-  geom_vline(xintercept = 1, linetype = 2, colour = "grey50") +
-  geom_point(size = 3.5, position = position_dodge(width = 0.6)) +
-  scale_colour_manual(values = pal[1:3], labels = c("Simulation time", "Build time", "Peak memory")) +
-  labs(x = "1.0 / 0.x (below 1: 1.0 is better)", y = NULL, colour = NULL)
+
+# Households of four: housemates meet
+# with probability 0.5
+household <- layer_mixing(
+  "household",
+  groups       = rep(0:(n / 4 - 1), each = 4),
+  contact_prob = 0.5
+)
+add_layer(model, household)
+
+# Work: the same coworkers every day
+add_layer(
+  model,
+  layer_network("work", graph_smallworld(10, 0.05))
+)
 ```
+:::
+::: {.column width="50%"}
+```{r}
+#| label: layers-code-2
+#| echo: true
+#| output: false
+# Public spaces: strangers, by age group
+add_param(model, "Public contact rate", 4)
+public <- layer_mixing(
+  "public",
+  groups         = assign_shares(c(0.25, 0.5, 0.25)),
+  contact_matrix = matrix(
+    c(0.6, 0.3, 0.1,
+      0.2, 0.6, 0.2,
+      0.1, 0.4, 0.5),
+    nrow  = 3,
+    byrow = TRUE
+  )
+) |>
+  set_contact_rate("Public contact rate")
+add_layer(model, public)
 
-<span class="small muted">epiworld-benchmark, medians over replicates; rerun after every engine change. The attack rates of the two engines agree.</span>
+run(model, ndays = 150, seed = 2131)
+summary(model)
+```
+:::
+::::
 
-<!-- Numbers: stage nh-5b-2 (epiworld-benchmark #40). GeoPops (04) went
-     from 0.97 to 1.08 with #377 (profiled: the one-disease stage update is
-     no longer inlined); a fix PR is planned before Phase 4. -->
+<span class="small">One SEIR model, three kinds of contacts: a network, mixing within groups, mixing across groups. 0.18 had either a network or mixing by entities, never both. [C++ equivalent &rarr;](#cpp-layers)</span>
 
-# New capabilities {background-color="#b02a37"}
+## New infections, by layer {#r-layers-out}
 
-## 1. Households, work and public spaces, in one model
-
+:::: {.columns}
+::: {.column width="42%"}
+```{r}
+#| label: layers-summary
+#| class-output: summary-out
+#| comment: ""
+summary_brief(model)
+```
+:::
+::: {.column width="58%"}
 ```{r}
 #| label: layers
-#| fig-width: 11
-#| fig-height: 4.3
-l <- fread("results/layers.csv")
-l[, layer := factor(layer, levels = c("household", "work", "public"))]
+#| fig-width: 6.5
+#| fig-height: 4.9
+tr <- as.data.table(get_transmissions(model))[layer >= 0]
+layer_names <- c("household", "work", "public")  # in the order they were added
+tr[, layer := factor(layer_names[layer + 1], levels = layer_names)]
+l <- tr[, .(n = .N), by = .(date, layer)]
 share <- l[, .(n = sum(n)), by = layer][, share := n / sum(n)]
 ggplot(l, aes(date, n, fill = layer)) +
   geom_col(width = 1) +
@@ -578,87 +728,284 @@ ggplot(l, aes(date, n, fill = layer)) +
   ) +
   labs(x = "Day", y = "New infections", fill = "Where")
 ```
+:::
+::::
 
-<span class="small">SEIR, 20,000 agents: households of four (mixing within groups), work (a small-world network), public spaces (a contact matrix across three age groups). Each transmission records its layer. <span class="muted">`examples/layers.cpp`</span></span>
+<span class="small">`summary(model)`, abridged, lists the layers; `get_transmissions()` records the layer of each one. [&larr; the code](#r-layers)</span>
 
-## 2. Durations with a shape
+## 2. Durations with a shape {#r-durations .ex}
 
 :::: {.columns}
-::: {.column width="40%"}
-```cpp
-// Same means: 4 days latent, 7 infectious
-if (shaped) {
-  v.after(E, I, Duration::lognormal(4.0, 1.0));
-  v.after(I, R, Duration::gamma(7.0, 2.0));
-} else {
-  v.after(E, I, Duration::geometric(4.0));
-  v.rate(I, R, 1.0 / 7.0);
+::: {.column width="56%"}
+```{r}
+#| label: durations-code-1
+#| echo: true
+#| output: false
+seir <- function(shaped) {
+  v <- virus("Flu") |>
+    add_stage("Susceptible") |>
+    add_stage("Exposed", carrier = TRUE) |>
+    add_stage("Infectious", infectious = TRUE) |>
+    add_stage("Recovered") |>
+    add_infection(
+      "Susceptible", "Exposed",
+      rate = "Transmission probability"
+    )
+  # Same means: 4 days latent, 7 infectious
+  if (shaped) {
+    v |>
+      add_after("Exposed", "Infectious", duration_lognormal(4, 1)) |>
+      add_after("Infectious", "Recovered", duration_gamma(7, 2))
+  } else {
+    v |>
+      add_after("Exposed", "Infectious", duration_geometric(4)) |>
+      add_rate("Infectious", "Recovered", rate = 1 / 7)
+  }
 }
 ```
-
-<span class="small">On a network, a less variable infectious period spreads further: few agents recover in a day or two, so more contacts are infected. 0.18 had only the geometric shape.</span>
 :::
-::: {.column width="60%"}
+::: {.column width="44%"}
+```{r}
+#| label: durations-code-2
+#| echo: true
+#| output: false
+simulate_durations <- function(shaped) {
+  model <- Model(20000) |>
+    add_param("Transmission probability", 0.04)
+  add_virus(model, seir(shaped), assign_count(20))
+  add_layer(
+    model,
+    layer_network("contacts", graph_smallworld(10, 0.05))
+  )
+  run_multiple(
+    model,
+    ndays = 365,
+    nsims = 20,
+    seed  = 100,
+    saver = make_saver("total_hist")
+  )
+  run_multiple_get_results(model)$total_hist
+}
+
+d <- rbindlist(
+  list(
+    geometric           = simulate_durations(FALSE),
+    `lognormal / gamma` = simulate_durations(TRUE)
+  ),
+  idcol = "durations"
+)
+```
+:::
+::::
+
+<span class="small">Durations are fixed, geometric, lognormal or gamma; 0.18 had only the geometric shape. [C++ equivalent &rarr;](#cpp-durations)</span>
+
+## Durations: infectious agents over time {#r-durations-out}
+
+:::: {.columns}
+::: {.column width="62%"}
 ```{r}
 #| label: durations
 #| fig-width: 7
 #| fig-height: 5
-d <- fread("results/durations.csv")
+d <- d[stage == "Infectious", .(infectious = sum(counts)), by = .(durations, sim_num, date)]
 dm <- d[, .(infectious = median(infectious)), by = .(durations, date)]
 ggplot(d, aes(date, infectious, colour = durations)) +
-  geom_line(aes(group = interaction(durations, run)), alpha = 0.15) +
+  geom_line(aes(group = interaction(durations, sim_num)), alpha = 0.15) +
   geom_line(data = dm, linewidth = 1.2) +
   scale_colour_manual(values = pal[1:2]) +
   labs(x = "Day", y = "Infectious agents", colour = NULL)
 ```
 :::
+::: {.column width="38%"}
+```{r}
+#| label: durations-summary
+#| class-output: table-out
+#| comment: ""
+peaks <- d[, .(peak = max(infectious), day = date[which.max(infectious)]), by = .(durations, sim_num)]
+peaks <- peaks[, .(peak = round(median(peak)), `peak day` = round(median(day))), by = durations]
+print(as.data.frame(peaks), row.names = FALSE)
+```
+
+<span class="small">Median peak of infectious agents, and the day it happens. On a network, a less variable infectious period spreads further: few agents recover in a day or two, so more contacts are infected.</span>
+:::
 ::::
 
-<!-- 20 runs each, 20,000 agents, small world (k = 10). Thin lines: runs;
-     thick: the median. examples/durations.cpp -->
+<span class="small muted">20 runs each, 20,000 agents, small world (k = 10). Thin lines: runs; thick: the median. [&larr; the code](#r-durations)</span>
 
-## 3. Quarantine and tracing, on several layers
+## 3. Quarantine and tracing, on several layers {#r-quarantine .ex}
 
 :::: {.columns}
-::: {.column width="45%"}
-```cpp
-epimodels::ModelSEIRQuarantine model(
-    "Flu", n, 0.001, 0.06, 3.0, 1.0 / 7.0,
-    0.01, 7.0,
-    5.0,  // detection delay
-    14,   // quarantine period
-    0.5,  // quarantine willingness
-    0.9,  // isolation willingness
-    7,    // isolation period (from onset)
-    0.5,  // contact tracing probability
-    4u    // contact tracing window
-);
-model.add_layer(households);
-model.add_layer(layer::network(
-    "work", graph::smallworld(8, 0.05)));
+::: {.column width="50%"}
+```{r}
+#| label: quarantine-code-1
+#| echo: true
+#| output: false
+make_model <- function(detection_delay) {
+  model <- ModelSEIRQuarantine(
+    name                   = "Flu",
+    n                      = 20000,
+    prevalence             = 0.001,
+    transmission_prob      = 0.06,
+    latent_period          = 3,
+    recovery_rate          = 1 / 7,
+    hospitalization_rate   = 0.01,
+    hospitalization_period = 7,
+    detection_delay        = detection_delay,
+    quarantine_period      = 14,
+    quarantine_willingness = 0.5,
+    isolation_willingness  = 0.9,
+    isolation_period       = 7,
+    contact_tracing_prob   = 0.5,
+    contact_tracing_window = 4L
+  )
+  # Households of four, and work
+  add_layer(
+    model,
+    layer_mixing(
+      "household",
+      groups       = rep(0:4999, each = 4),
+      contact_prob = 0.3
+    )
+  )
+  add_layer(
+    model,
+    layer_network("work", graph_smallworld(8, 0.05))
+  )
+  model
+}
 ```
-<span class="small">Detected cases are isolated; their contacts **in every layer** are traced and quarantined.</span>
 :::
-::: {.column width="55%"}
+::: {.column width="50%"}
+```{r}
+#| label: quarantine-code-2
+#| echo: true
+#| output: false
+simulate_quarantine <- function(detection_delay) {
+  model <- make_model(detection_delay)
+  run_multiple(
+    model,
+    ndays = 250,
+    nsims = 10,
+    seed  = 70,
+    saver = make_saver("total_hist")
+  )
+  run_multiple_get_results(model)$total_hist
+}
+
+# A negative detection delay: never
+q <- rbindlist(
+  list(
+    `no policy`           = simulate_quarantine(-1),
+    `detection + tracing` = simulate_quarantine(5)
+  ),
+  idcol = "policy"
+)
+```
+
+<span class="small">Detected cases are isolated; their contacts **in every layer** are traced and quarantined. [C++ equivalent &rarr;](#cpp-quarantine)</span>
+:::
+::::
+
+## Quarantine and tracing: infected agents {#r-quarantine-out}
+
+:::: {.columns}
+::: {.column width="58%"}
 ```{r}
 #| label: quarantine
 #| fig-width: 6.5
 #| fig-height: 5.2
-q <- fread("results/quarantine.csv")
 inf <- q[stage %in% c("Exposed", "Infected", "Severe"),
-         .(n = sum(count)), by = .(policy, run, date)]
+         .(n = sum(counts)), by = .(policy, sim_num, date)]
 infm <- inf[, .(n = median(n)), by = .(policy, date)]
 ggplot(inf, aes(date, n, colour = policy)) +
-  geom_line(aes(group = interaction(policy, run)), alpha = 0.2) +
+  geom_line(aes(group = interaction(policy, sim_num)), alpha = 0.2) +
   geom_line(data = infm, linewidth = 1.2) +
   scale_colour_manual(values = pal[c(2, 1)]) +
   labs(x = "Day", y = "Infected agents (E, I, Severe)", colour = NULL)
 ```
 :::
+::: {.column width="42%"}
+```{r}
+#| label: quarantine-summary
+#| class-output: table-out
+#| comment: ""
+res <- merge(
+  inf[, .(peak = max(n)), by = .(policy, sim_num)],
+  q[date == max(date),
+    .(attack = 1 - sum(counts[stage == "Susceptible"]) / sum(counts)),
+    by = .(policy, sim_num)],
+  by = c("policy", "sim_num")
+)
+res <- res[, .(
+  `peak infected` = round(median(peak)),
+  `attack rate`   = sprintf("%.0f%%", 100 * median(attack))
+), by = policy]
+print(as.data.frame(res), row.names = FALSE)
+```
+
+<span class="small">Medians of 10 runs: with detection and tracing, both the peak and the share of agents ever infected fall sharply.</span>
+:::
 ::::
 
-<!-- 10 runs each; illustrative parameters. Households: groups of four,
-     contact probability 0.3. examples/quarantine.cpp -->
+<span class="small muted">Illustrative parameters. Households: groups of four, contact probability 0.3. Thin lines: runs; thick: the median. [&larr; the code](#r-quarantine)</span>
+
+## Quarantine and tracing: one run {#r-quarantine-run .ex}
+
+:::: {.columns}
+::: {.column width="52%"}
+```{r}
+#| label: quarantine-run
+#| echo: true
+#| output: false
+model <- make_model(detection_delay = 5)
+run(model, ndays = 30, seed = 70)
+summary(model)
+```
+
+```{r}
+#| label: quarantine-run-summary-1
+#| class-output: summary-out
+#| comment: ""
+summary_brief(
+  model,
+  drop = "Tool\\(s\\)|Transition Probabilities|Distribution",
+  only = "SIMULATION|Global events|Virus|Model parameters"
+)
+```
+:::
+::: {.column width="48%"}
+```{r}
+#| label: quarantine-run-summary-2
+#| class-output: summary-out
+#| comment: ""
+summary_brief(model, only = "Distribution", zero = FALSE)
+```
+
+<span class="small">One run, 30 days in (`summary(model)`, abridged): a global event runs the quarantine process daily, and the population is shown by status / stage, from the 20 initial cases to who is quarantined, isolated or recovered. Rows at zero and the 20 &times; 20 transition matrix are left out. [&larr; the code](#r-quarantine)</span>
+:::
+::::
+
+## Quarantine and tracing: the model's diagram {#r-quarantine-diagram}
+
+```{r}
+#| label: quarantine-diagram
+# Tighter spacing: the diagram has to fit in the area quarto captures
+writeLines(
+  c(
+    "%%{init: {'flowchart': {'nodeSpacing': 18, 'rankSpacing': 28, 'padding': 6}}}%%",
+    as.character(draw_natural_history(model))
+  ),
+  "build/quarantine.mmd"
+)
+```
+
+```{mermaid}
+%%| file: build/quarantine.mmd
+%%| fig-width: 11
+```
+
+<span class="small">`draw_natural_history(model)`: five stages, four statuses. [&larr; the code](#r-quarantine)</span>
 
 ## Statuses over time
 
@@ -666,8 +1013,8 @@ ggplot(inf, aes(date, n, colour = policy)) +
 #| label: statuses
 #| fig-width: 11
 #| fig-height: 4.4
-st <- fread("results/quarantine.csv")[policy == "detection + tracing" & status != "Free"]
-st <- st[, .(n = sum(count)), by = .(run, date, status, stage)]
+st <- q[policy == "detection + tracing" & status != "Free"]
+st <- st[, .(n = sum(counts)), by = .(sim_num, date, status, stage)]
 st <- st[, .(n = mean(n)), by = .(date, status, stage)]
 st <- st[date <= 120]
 ggplot(st, aes(date, n, fill = stage)) +
@@ -679,37 +1026,107 @@ ggplot(st, aes(date, n, fill = stage)) +
 
 <span class="small">The runs with the policy, by status and stage: quarantined agents are mostly susceptible (traced contacts who were not infected); isolated agents are infected, or recovered before their isolation (7 days from onset) ends. In 0.18, each of these combinations was a separate state.</span>
 
-## 4. Two diseases in one population
+## 4. Two diseases in one population {#r-two-diseases .ex}
+
+:::: {.columns}
+::: {.column width="50%"}
+```{r}
+#| label: two-diseases-code-1
+#| echo: true
+#| output: false
+model <- Model(20000) |>
+  add_param("Flu transmission", 0.07) |>
+  add_param("Flu B transmission", 0.09) |>
+  add_param("RSV transmission", 0.03)
+add_layer(
+  model,
+  layer_network("contacts", graph_smallworld(10, 0.05))
+)
+
+# Influenza: SEIR, lognormal latent period
+flu <- virus("Influenza") |>
+  add_stage("Susceptible") |>
+  add_stage("Exposed", carrier = TRUE) |>
+  add_stage("Infectious", infectious = TRUE) |>
+  add_stage("Recovered") |>
+  add_infection(
+    "Susceptible", "Exposed",
+    rate = "Flu transmission"
+  ) |>
+  add_after("Exposed", "Infectious", duration_lognormal(2, 0.5)) |>
+  add_rate("Infectious", "Recovered", rate = 1 / 5)
+add_virus(model, flu, assign_count(10))
+
+# A strain: a copy of the virus, same disease
+flu_b <- strain(flu, "Influenza B") |>
+  use_param("Flu transmission", "Flu B transmission")
+add_virus(model, flu_b, assign_count(5))
+```
+:::
+::: {.column width="50%"}
+```{r}
+#| label: two-diseases-code-2
+#| echo: true
+#| output: false
+# RSV: SIR, about ten days infectious;
+# built from scratch: a different disease
+rsv <- virus("RSV") |>
+  add_stage("Susceptible") |>
+  add_stage("Infectious", infectious = TRUE) |>
+  add_stage("Recovered") |>
+  add_infection(
+    "Susceptible", "Infectious",
+    rate = "RSV transmission"
+  ) |>
+  add_rate("Infectious", "Recovered", rate = 1 / 10)
+add_virus(model, rsv, assign_count(10))
+
+# A flu vaccine: tools name their diseases
+vax <- tool(
+  "Flu vaccine",
+  susceptibility_reduction = 0.6,
+  transmission_reduction   = 0,
+  recovery_enhancer        = 0,
+  death_reduction          = 0
+)
+add_target_tool(vax, "Influenza")
+add_tool(model, vax, assign_share(0.3))
+
+run(model, ndays = 250, seed = 15)
+summary(model)
+```
+:::
+::::
+
+<span class="small">Influenza (SEIR, with a second strain) and RSV (SIR) on one population. [C++ equivalent &rarr;](#cpp-two-diseases)</span>
+
+## Two diseases: what the model reports {#r-two-diseases-out}
 
 :::: {.columns}
 ::: {.column width="45%"}
-```cpp
-Virus flu("Influenza");        // SEIR
-// ... stages, lognormal latent period
-model.add_virus(flu, assign::count(10));
-
-Virus flu_b = flu.strain("Influenza B");
-flu_b.use_param("Flu transmission",
-                "Flu B transmission");
-model.add_virus(flu_b, assign::count(5));
-
-Virus rsv("RSV");              // SIR
-// ... its own stages
-model.add_virus(rsv, assign::count(10));
-
-Tool vax("Flu vaccine");
-vax.add_target("Influenza");   // required
-model.add_tool(vax, assign::share(0.3));
+```{r}
+#| label: two-diseases-summary
+#| class-output: summary-out
+#| comment: ""
+summary_brief(
+  model,
+  drop = c("Global events", "Tool\\(s\\)", "Transition Probabilities", "Model parameters")
+)
 ```
 :::
 ::: {.column width="55%"}
 ```{r}
 #| label: two-diseases
 #| fig-width: 6.5
-#| fig-height: 5.2
-t <- fread("results/two_diseases.csv")
-both <- fread("results/two_diseases_summary.csv")$both
-inf <- t[stage %in% c("Exposed", "Infectious"), .(n = sum(count)), by = .(disease, date)]
+#| fig-height: 5
+h  <- as.data.table(get_hist_total(model))
+tr <- as.data.table(get_transmissions(model))
+# Agents who had both diseases, one after the other
+both <- length(intersect(
+  tr[disease == "Influenza", target],
+  tr[disease == "RSV", target]
+))
+inf <- h[stage %in% c("Exposed", "Infectious"), .(n = sum(counts)), by = .(disease, date)]
 ggplot(inf, aes(date, n, colour = disease)) +
   geom_line(linewidth = 1.2) +
   scale_colour_manual(values = pal[c(1, 2)]) +
@@ -720,6 +1137,8 @@ ggplot(inf, aes(date, n, colour = disease)) +
 ```
 :::
 ::::
+
+<span class="small">`summary(model)`, abridged, reports each disease on its own. [&larr; the code](#r-two-diseases)</span>
 
 ## Several diseases: the rules
 
@@ -740,23 +1159,27 @@ ggplot(inf, aes(date, n, colour = disease)) +
 #| label: strains
 #| fig-width: 11
 #| fig-height: 4.6
-s <- fread("results/two_diseases_strains.csv")
-s <- s[, .N, by = .(virus, date)]
+s <- tr[source >= 0, .N, by = .(virus, date)]
 ggplot(s, aes(date, N, colour = virus)) +
   geom_line(linewidth = 1.1) +
   scale_colour_manual(values = pal[c(1, 4, 2)]) +
   labs(x = "Day", y = "New infections", colour = NULL)
 ```
 
-<span class="small">Influenza B, a strain with a higher transmission probability, outcompetes the founding strain; both are the same disease (the vaccine and the "Recovered" stage cover both). RSV spreads on the same network. <span class="muted">`examples/two_diseases.cpp`</span></span>
+<span class="small">Influenza B, a strain with a higher transmission probability, outcompetes the founding strain; both are the same disease (the vaccine and the "Recovered" stage cover both). RSV spreads on the same network.</span>
 
 ## The model's diagram, drawn from its declarations
 
-```{mermaid}
-%%| file: results/two_diseases.mmd
+```{r}
+#| label: diagram
+writeLines(as.character(draw_natural_history(model)), "build/two_diseases.mmd")
 ```
 
-<span class="small">`model.draw_natural_history()`: one subgraph per disease (and one for the statuses, if any); infectious stages in red, carriers in yellow.</span>
+```{mermaid}
+%%| file: build/two_diseases.mmd
+```
+
+<span class="small">`draw_natural_history(model)`: one subgraph per disease (and one for the statuses, if any); infectious stages in red, carriers in yellow.</span>
 
 ## 5. Extending a model from R or Python with C++
 
@@ -813,7 +1236,7 @@ get_hist_transitions(model)
 <!-- epiworldR v1-layers, vignette "model-builder". Python has the same
      builder (Virus.add_stage(...).add_infection(...)). -->
 
-# What's next {background-color="#1f2a44"}
+# Part 3 -- What's next {background-color="#00707a"}
 
 ## The road to 1.0.0
 
@@ -829,19 +1252,64 @@ get_hist_transitions(model)
 <!-- Phase 7's tracing intervention replaces the four copies of the
      quarantine loop (SEIR quarantine and the three measles models). -->
 
-## Trying it today
+## Installing the 1.0 preview {#install .ex}
 
 :::: {.columns}
-::: {.column width="52%"}
-### Install
+::: {.column width="50%"}
+### R: epiworldR
 
-- **C++:** the `v1-layers` branch of `UofUEpiBio/epiworld`; one header, `epiworld.hpp`
-- **R:** `remotes::install_github(` `"UofUEpiBio/epiworldR@v1-layers")`
-- **Python:** `pip install git+https://` `github.com/UofUEpiBio/epiworldpy@v1-layers`
-- **Docs:** `docs/impl/` on the branch: *Natural History and Statuses*, *Extending the Library with Models*
+```r
+# install.packages("remotes")
+remotes::install_github(
+  "UofUEpiBio/epiworldR@v1-layers"
+)
+
+library(epiworldR)
+packageVersion("epiworldR")  # 1.0.0.0
+```
+
+### C++: one header
+
+```sh
+curl -LO https://raw.githubusercontent.com/\
+UofUEpiBio/epiworld/v1-layers/epiworld.hpp
+g++ -std=c++17 -O2 my_model.cpp -o my_model
+```
 :::
-::: {.column width="48%"}
-### Migrating from 0.18
+::: {.column width="50%"}
+### Python: epiworldpy (Python &ge; 3.10)
+
+```sh
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install \
+  "git+https://github.com/UofUEpiBio/epiworldpy@v1-layers"
+
+python -c "from importlib.metadata import version; \
+print(version('epiworldpy'))"  # 1.0.0-0
+```
+
+### What you need
+
+::: {.small}
+- **A C++17 compiler**: Rtools (Windows), `xcode-select --install` (macOS), `build-essential` (Linux). Both packages compile from source; pip fetches pybind11 and CMake itself
+- **The branch, not CRAN or PyPI**: `install.packages("epiworldR")` and `pip install epiworldpy` give **0.x**, whose code is not compatible
+:::
+:::
+::::
+
+<span class="small">The preview replaces an installed 0.x; reinstall from CRAN or PyPI to go back. The branches move until 1.0.0 is released. Or use this talk's devcontainer (`.devcontainer/`): epiworldR 1.0 installed, and the compiler and Python for the other two.</span>
+
+<!-- Checked 2026-11-18 in the devcontainer image (Ubuntu 24.04, R 4.6,
+     Python 3.12): the R and Python commands install epiworldR 1.0.0.0
+     (8d768ea5) and epiworldpy 1.0.0-0 (b993ff0b); epiworldpy has no
+     __version__, hence importlib.metadata. -->
+
+## Migrating from 0.18
+
+:::: {.columns}
+::: {.column width="55%"}
+### The code
 
 - Population size into the constructor; networks and mixing via `add_layer()`
 - `*CONN`, `*Mixing` models: the base model plus a layer
@@ -849,7 +1317,116 @@ get_hist_transitions(model)
 - `add_state()` + update functions → `add_stage()` + declared transitions
 - `Model<>` → `Model`
 :::
+::: {.column width="45%"}
+### The documentation
+
+- `docs/impl/` on the `v1-layers` branch of epiworld: *Natural History and Statuses*, *Extending the Library with Models*
+- epiworldR: the `model-builder` vignette
+- This talk's examples: R in the slides, C++ in the appendix and in `examples/`
+:::
 ::::
+
+## Benchmark: speed and memory {.nostretch}
+
+```{r}
+#| label: benchmark-speed
+#| fig-width: 12
+#| fig-height: 4.9
+b <- fread("results/benchmark_runs.csv")
+b <- b[, .SD[n == max(n)], by = scenario]  # each scenario at its largest size
+engine_names <- c(
+  "epiworld-v1" = "epiworld 1.0",
+  "epiworld"    = "epiworld 0.17.1"
+)
+b[, engine := ifelse(engine %in% names(engine_names), engine_names[engine], engine)]
+b[engine %in% c("EoN", "ABM"), engine := paste0(engine, "*")]
+b[, family := fifelse(
+  engine == "epiworld 1.0", "epiworld 1.0",
+  fifelse(grepl("^epiworld", engine), "epiworld 0.17.1 (C++, R, Python)", "other engines")
+)]
+b[, engine := factor(engine, levels = b[, median(simulate), by = engine][order(-V1), engine])]
+b[, scenario := factor(scenario, labels = c(
+  "00 SEIRH, 100k", "01 + vaccine", "02 + outputs", "03 1M agents", "04 GeoPops, 166k"
+))]
+long <- rbind(
+  b[, .(engine, family, scenario, measure = "Simulation time (s)", value = simulate)],
+  b[, .(engine, family, scenario, measure = "Peak memory (MiB)", value = peak)]
+)
+long[, measure := factor(measure, levels = c("Simulation time (s)", "Peak memory (MiB)"))]
+ggplot(long, aes(value, engine)) +
+  geom_point(aes(colour = family, shape = scenario), size = 2.8) +
+  facet_wrap(~measure, scales = "free_x") +
+  scale_x_log10(labels = function(x) format(x, scientific = FALSE, drop0trailing = TRUE)) +
+  scale_colour_manual(values = c(
+    "epiworld 1.0"                     = pal[2],
+    "epiworld 0.17.1 (C++, R, Python)" = pal[1],
+    "other engines"                    = "grey60"
+  )) +
+  scale_shape_manual(values = c(16, 17, 15, 18, 4)) +
+  labs(x = "Median over replicates (log scale)", y = NULL, colour = NULL, shape = NULL) +
+  theme(
+    legend.position = "right",
+    axis.text.y     = element_text(colour = ifelse(grepl("^epiworld", levels(b$engine)), pal[1], "grey40"))
+  )
+```
+
+```{r}
+#| label: benchmark-ratio
+r <- dcast(
+  fread("results/benchmark_runs.csv")[engine %in% c("epiworld", "epiworld-v1")],
+  scenario + n ~ engine,
+  value.var = c("simulate", "peak")
+)
+ratio <- function(x) sprintf("%.2f to %.2f", min(x), max(x))
+```
+
+<span class="small">The same SEIRH model on the same network in 14 engines; each scenario at its largest size. epiworld 1.0 against 0.17.1, across the 8 scenario sizes: simulation time &times;`r ratio(r$"simulate_epiworld-v1" / r$simulate_epiworld)`, peak memory &times;`r ratio(r$"peak_epiworld-v1" / r$peak_epiworld)`. <span class="muted">\* continuous time (no daily steps).</span></span>
+
+## Benchmark: code compactness
+
+:::: {.columns}
+::: {.column width="62%"}
+```{r}
+#| label: benchmark-lines
+#| fig-width: 7.2
+#| fig-height: 5.4
+lc <- fread("results/benchmark_lines.csv")[scenario %in% c("scenario_00", "scenario_01", "scenario_02")]
+lc[, engine := ifelse(engine %in% names(engine_names), engine_names[engine], engine)]
+lc[, label := sprintf("%s (%s)", engine, language)]
+# FRED models are files in its own language; the runner writes them from Python
+lc[engine == "FRED", label := "FRED (model file via Python)"]
+lc[, label := factor(label, levels = lc[scenario == "scenario_02"][order(-lines), label])]
+lc[, scenario := factor(scenario, labels = c("00 SEIRH", "01 + vaccine", "02 + outputs"))]
+ggplot(lc, aes(lines, label)) +
+  geom_line(aes(group = label), colour = "grey75", linewidth = 1) +
+  geom_point(aes(colour = scenario), size = 3) +
+  scale_colour_manual(values = pal[c(1, 3, 2)]) +
+  labs(x = "Lines of model code", y = NULL, colour = NULL) +
+  theme(axis.text.y = element_text(
+    colour = ifelse(grepl("^epiworld", levels(lc$label)), pal[1], "grey40")
+  ))
+```
+:::
+::: {.column width="38%"}
+```{r}
+#| label: benchmark-lines-table
+#| class-output: table-out
+#| comment: ""
+w <- dcast(lc[grepl("^epiworld", engine)], engine ~ scenario, value.var = "lines")
+setnames(w, c("engine", "00", "01", "02"))
+print(as.data.frame(w), row.names = FALSE)
+```
+
+<span class="small">Lines that build the population and network, define the disease and run the model (argument parsing, reading files, timing and output are left out). The C++ library is among the shortest of the 14, and 1.0, which declares stages and transitions, needs about as many lines as 0.17.1 (26 &rarr; 27 for the base model).</span>
+:::
+::::
+
+```{r}
+#| label: benchmark-source
+meta <- fread("results/benchmark_meta.csv")
+```
+
+<span class="small muted">epiworld-benchmark, branch `v1-layers` (`r meta$commit[1]`): epiworld 1.0 at `r meta[engine == "epiworld-v1", engine_version]`. `make benchmark` updates these numbers.</span>
 
 ## Thank you {.center}
 
@@ -857,4 +1434,42 @@ get_hist_transitions(model)
 
 Questions?
 
-<span class="small muted">Slides and examples: `examples/*.cpp` build against the vendored `epiworld.hpp` (`make all`).</span>
+<span class="small muted">Slides and examples: the R examples run when the slides render; their C++ equivalents (`examples/*.cpp`, in the appendix) build against the vendored `epiworld.hpp` (`make all`).</span>
+
+# Appendix -- the C++ equivalents {background-color="#00707a"}
+
+## C++: households, work and public spaces {#cpp-layers .cpp}
+
+```{r}
+#| output: asis
+cpp_blocks("examples/layers.cpp", widths = c(52, 48))
+```
+
+<span class="small">[&lt;go back&gt;](#r-layers) &middot; `examples/layers.cpp`: the same model as the R example</span>
+
+## C++: durations with a shape {#cpp-durations .cpp}
+
+```{r}
+#| output: asis
+cpp_blocks("examples/durations.cpp", widths = c(50, 50))
+```
+
+<span class="small">[&lt;go back&gt;](#r-durations) &middot; `examples/durations.cpp`: 20 runs of each shape, to `results/durations.csv`</span>
+
+## C++: quarantine and tracing {#cpp-quarantine .cpp}
+
+```{r}
+#| output: asis
+cpp_blocks("examples/quarantine.cpp", widths = c(55, 45))
+```
+
+<span class="small">[&lt;go back&gt;](#r-quarantine) &middot; `examples/quarantine.cpp`: 10 runs with and without the policy</span>
+
+## C++: two diseases {#cpp-two-diseases .cpp}
+
+```{r}
+#| output: asis
+cpp_blocks("examples/two_diseases.cpp", widths = c(50, 50))
+```
+
+<span class="small">[&lt;go back&gt;](#r-two-diseases) &middot; `examples/two_diseases.cpp`: also writes the diagram and the counts by disease</span>

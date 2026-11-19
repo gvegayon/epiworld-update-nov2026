@@ -19,6 +19,7 @@ int main()
     for (bool policy : {false, true})
     {
 
+        // slide-begin
         epimodels::ModelSEIRQuarantine model(
             "Flu", n,
             0.001,             // prevalence
@@ -36,7 +37,9 @@ int main()
             4u                 // contact tracing window
         );
         model.verbose_off();
+        // slide-end
 
+        // slide-begin
         std::vector< size_t > household(n);
         for (size_t i = 0u; i < n; ++i)
             household[i] = i / 4u;
@@ -45,6 +48,7 @@ int main()
         home->set_contact_prob({0.3});
         model.add_layer(home);
         model.add_layer(layer::network("work", graph::smallworld(8, 0.05)));
+        // slide-end
 
         for (int run = 0; run < 10; ++run)
         {

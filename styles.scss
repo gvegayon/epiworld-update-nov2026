@@ -1,24 +1,53 @@
 /*-- scss:defaults --*/
-$font-family-sans-serif: "Source Sans Pro", "Helvetica Neue", Helvetica, sans-serif;
+// The palette of the conditional-ERGMs deck (accent from the CV / website)
+$accent:  #00707a;
+$muted:   #6b7280;
+$results-accent: #c0491f;
+
 $presentation-font-size-root: 34px;
 $code-block-font-size: 0.52em;
-$link-color: #b02a37;
-$presentation-heading-color: #1f2a44;
+$link-color: $accent;
+$presentation-heading-color: $accent;
+$presentation-heading-font-weight: 600;
 
 /*-- scss:rules --*/
-.reveal .slide-number { font-size: 0.5em; }
+.reveal .slide-number { font-size: 0.5em; color: $muted; }
+.reveal .footer       { color: $muted; font-size: 0.55em; }
+#title-slide .subtitle { color: $muted; }
 .reveal pre code { max-height: 560px; line-height: 1.25; }
 .reveal .columns .column h3 {
   font-size: 0.7em;
   margin-bottom: 0.2em;
-  color: #6c757d;
+  color: $muted;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.reveal .before h3 { color: #6c757d; }
-.reveal .after h3 { color: #b02a37; }
+.reveal .before h3 { color: $muted; }
+.reveal .after h3 { color: $accent; }
 .reveal .small { font-size: 0.7em; }
-.reveal .muted { color: #6c757d; }
+.reveal .muted { color: $muted; }
 .reveal table { font-size: 0.62em; }
-.reveal .big-number { font-size: 2.2em; font-weight: 700; color: #b02a37; line-height: 1; }
+.reveal .big-number { font-size: 2.2em; font-weight: 700; color: $accent; line-height: 1; }
 .reveal .mermaid svg { max-height: 520px; }
+.reveal pre.summary-out code { font-size: 0.82em; line-height: 1.2; }
+.reveal section.ex pre code { font-size: 0.82em; line-height: 1.22; }
+.reveal .columns pre { margin: 0 0 0.4em 0; }
+.reveal section.cpp pre code { font-size: 0.72em; line-height: 1.22; }
+.reveal pre.table-out code { font-size: 1em; }
+.reveal .feature-table table { font-size: 0.42em; line-height: 1.15; }
+.reveal .feature-table td:first-child { white-space: nowrap; }
+.reveal .feature-table th, .reveal .feature-table td { padding: 0.18em 0.3em; }
+.reveal .feature-table td:nth-child(3), .reveal .feature-table th:nth-child(3) { background: mix($accent, #fff, 9%); }
+.reveal .chg { color: $results-accent; font-weight: 700; }
+.reveal .takeaway {
+  border-left: 4px solid $accent;
+  padding-left: .7em;
+  font-style: italic;
+}
+// Printed R output (summary(), small tables): espresso colours code for a dark
+// panel, so output blocks get a light one with dark text instead
+.reveal pre.summary-out, .reveal pre.table-out { background: #f6f7f8; border: 1px solid #e5e7eb; }
+.reveal pre.summary-out code, .reveal pre.table-out code { color: #1f2937; background: transparent; }
+// Footer on the teal section dividers (reveal flags them as dark)
+.reveal.has-dark-background .footer,
+.reveal.has-dark-background .footer a { color: rgba(255, 255, 255, .75); }
