@@ -3,6 +3,7 @@ title: "epiworld 1.0"
 subtitle: "Contact layers, natural histories, and several diseases"
 author: "George G. Vega Yon"
 date: 2026-11-19
+lightbox: true
 format:
   revealjs:
     theme: [default, styles.scss]
@@ -118,50 +119,9 @@ pal <- c("#00707a", "#c0491f", "#d39e00", "#1f2a44")
   `make results`.
 -->
 
-## Where we are
+## Why a 1.0? {.nostretch}
 
-:::: {.columns}
-::: {.column width="55%"}
-- **Last release:** epiworld 0.18.0 (October 2026)
-- **1.0 in progress** on the `v1-layers` branches of epiworld, epiworldR, epiworldpy, epiworldjs and measles
-- **More than 50 pull requests** in epiworld since 0.18.0, each one followed by ports to the wrappers
-- Every engine change is checked against the 0.x engine in **epiworld-benchmark**
-:::
-::: {.column width="45%"}
-### Four big changes
-
-1. **Contact layers**: networks and mixing, in one model
-2. **Natural histories**: stages declared on the virus, statuses on the model
-3. **Several diseases** per model
-4. **A smaller API**: fewer models, one placement vocabulary, plain classes
-:::
-::::
-
-<!-- The release waits for Phases 4-7 (participation, push for mixing, the
-     combination rule, measles as presets). -->
-
-## Why a 1.0?
-
-:::: {.columns}
-::: {.column width="50%"}
-### What 0.18 made hard
-
-- A model had **one** contact structure: a network *or* mixing by entities
-- States and their logic were **hand-written update functions**
-- Quarantine meant **duplicated states**: "Quarantined Exposed", "Isolated Recovered", ...
-- Durations were **geometric** (memoryless), unless you wrote your own timers
-- Every virus **shared the model's states**: no two diseases with their own histories
-:::
-::: {.column width="50%"}
-### What 1.0 does
-
-- A model has **layers**: households, work, school, public spaces, each the kind that fits
-- States are **declared**: stages, transitions, durations, rates
-- **Status × stage**: where an agent is, and how sick it is, apart
-- Durations: **fixed, geometric, lognormal, gamma**, or your function
-- **Several diseases**, each with its own natural history
-:::
-::::
+![](fig/diagrams/epiworld-why-1.0.svg){width="100%" fig-alt="What epiworld 0.18 made hard and what 1.0 does: one contact structure becomes any number of layers; hand-written update functions become declared natural histories; quarantine by duplicated states becomes status times stage; geometric durations become durations with a shape; one set of states for every virus becomes several diseases."}
 
 ## By the numbers
 
@@ -315,16 +275,9 @@ model.add_layer(layer::network(
 - The **virus carries its natural history**: stages and the transitions between them
 - Every number becomes a **model parameter** (`"covid 19: Infected -> Recovered"`), changeable with `set_param()`
 
-## Four kinds of transitions
+## Four kinds of transitions {.nostretch}
 
-| Declared with | Happens | Evaluated |
-|---|---|---|
-| `infection(from, to, p)` | a contact with an infectious agent transmits | daily, from the day's contacts (any layer) |
-| `rate(from, to, p)` | with a daily probability | daily: can change during the run, or under a tool |
-| `after(from, to, duration)` | when a duration, drawn on entering the stage, ends | once, on entry |
-| `external(from, to, name)` | when code fires it (`model.fire()`) | when fired |
-
-<br>
+![](fig/diagrams/epiworld-transitions.svg){width="100%" fig-alt="The four kinds of transitions on a flu model: infection(S, E, p) when a contact transmits; after(E, I, d) when a duration drawn on entry ends; rate(I, R, p) and rate(I, H, p), daily probabilities that compete; external({E, I}, R, name), fired by code."}
 
 ```cpp
 flu.after(E, I, Duration::lognormal(3.0, 1.0));           // shaped duration
@@ -336,6 +289,15 @@ flu.external({E, I}, R, "Antiviral cure");                // fired by an interve
 <!-- Rates compete through one roulette draw (odds); a rate plus a branch,
      .to({{R, 0.9}, {H, 0.1}}), gives exact probabilities. Docs page:
      docs/impl/natural-history-and-statuses.md -->
+
+## A day in an epiworld 1.0 model {.nostretch}
+
+![](fig/diagrams/epiworld-day.svg){width="100%" fig-alt="How an epiworld 1.0 model runs: set-up at the start of each run, then each day every agent proposes an infection, stage changes and a status change, which are applied together before global events run and the day is recorded."}
+
+<span class="small">Infection first, then each disease's stage, then the status; every proposal is applied at once, at the end of the day.</span>
+
+<!-- fig/diagrams/epiworld-day.svg, drawn from Model::run(), reset(),
+     update_state() and nh_step() (epiworld v1-layers). -->
 
 ## Custom logic: a community and a hospital
 
@@ -475,19 +437,25 @@ home->set_contact_prob({0.5});
 :::
 ::::
 
-## Fewer models
+## Where an infection comes from {.nostretch}
 
-| 0.18 | 1.0 |
-|---|---|
-| `ModelSIRCONN`, `ModelSEIRCONN`, `ModelSIRDCONN`, `ModelSEIRDCONN` | `ModelSIR`, `ModelSEIR`, `ModelSIRD`, `ModelSEIRD` + a one-group mixing layer |
-| `ModelSIRMixing`, `ModelSEIRMixing` | `ModelSIR`, `ModelSEIR` + a mixing layer |
-| `ModelSEIRNetworkQuarantine`, `ModelSEIRMixingQuarantine` | `ModelSEIRQuarantine`, on any layers |
-| Entities (`Entity`, `distribute_*_to_entities`) | layer memberships (`assign::`) |
-| `Model<TSeq>`, `Virus<TSeq>`, sequences | plain classes; variants by id (`strain()`, mutations) |
+![](fig/diagrams/epiworld-infection.svg){width="100%" fig-alt="A susceptible agent pulls its contacts from every layer; each infectious contact gives a probability reduced by both agents' tools, the layer's weight scales its odds, and one draw over all layers picks no infection or one infector."}
 
-<br>
+<span class="small">All layers feed **one** draw (not one chance per layer), and the draw records the layer: `get_transmissions()`.</span>
 
-- **A registry** builds every model by name, with documented arguments: `make_model("SEIR", values)`, `list_models()`, `get_model_info()` — one binding in each wrapper instead of one per model
+<!-- fig/diagrams/epiworld-infection.svg, drawn from nh_step_infection() and
+     the exposure loop of model-meat-transmission.hpp (epiworld v1-layers). -->
+
+## Fewer models {.nostretch}
+
+![](fig/diagrams/epiworld-models.svg){width="80%" fig-alt="Twelve 0.18 models that differed only in their contacts map onto five 1.0 models plus a layer: a network layer, a one-group mixing layer, or a mixing layer with groups and a contact matrix."}
+
+::: {.small}
+Also gone: entities (a layer's membership now) and `Model<TSeq>`. **A registry** builds every model by name: `make_model("SEIR", values)`.
+:::
+
+<!-- fig/diagrams/epiworld-models.svg, from include/epiworld/models/ on
+     epiworld master (0.18) and v1-layers. -->
 
 ## Placing viruses, tools and groups
 
@@ -1238,19 +1206,15 @@ get_hist_transitions(model)
 
 # Part 3 -- What's next {background-color="#00707a"}
 
-## The road to 1.0.0
+## The road to 1.0.0 {.nostretch}
 
-| Step | What |
-|---|---|
-| Now | Wrapper ports of several diseases (epiworldR, epiworldpy, epiworldjs, measles), then epiworldRShiny |
-| Phase 4 | Participation by status and layer, layer-targeted tools, schedules (weekdays), persistence |
-| Phase 5 | Push transmission for mixing layers |
-| Phase 6 | Independent exposures as the combination rule; documentation and migration guide |
-| Phase 7 | Measles as presets: the generic sampler on any layers, one contact-tracing intervention in the core |
-| Release | epiworld 1.0.0, then epiworldR, epiworldpy, epiworldjs, measles, epiworldRShiny |
+![](fig/diagrams/epiworld-roadmap.svg){width="100%" fig-alt="The road to epiworld 1.0.0: Phases 0 to 4, natural histories and several diseases are done (October 19 to November 19); Phases 5, 6 and 7 and the release are next."}
 
-<!-- Phase 7's tracing intervention replaces the four copies of the
-     quarantine loop (SEIR quarantine and the three measles models). -->
+<span class="small">Phase 4 (4a–4d) merged this week, with its ports to epiworldR and epiworldpy. Phase 7's tracing intervention replaces the four copies of the quarantine loop.</span>
+
+<!-- Phases and dates: epiworld v1-layers, contact-layers.md (6. Branching
+     and phases; 11.6 Status) and the merge dates of the phase PRs
+     (#315, #316-#317, #318-#353, #363-#370, #371-#379, #380-#384). -->
 
 ## Installing the 1.0 preview {#install .ex}
 

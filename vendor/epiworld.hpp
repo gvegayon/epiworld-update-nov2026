@@ -4711,8 +4711,10 @@ public:
      * @return epiworld_double 
      */
     ///@{
-    epiworld_double get_susceptibility_reduction(VirusPtr & v, Model & model);
-    epiworld_double get_transmission_reduction(VirusPtr & v, Model & model);
+    /// The tools' combined contact effects on a contact through layer
+    /// `layer` (-1: not through a layer; see `Tool::add_layer_target()`).
+    epiworld_double get_susceptibility_reduction(VirusPtr & v, Model & model, int layer = -1);
+    epiworld_double get_transmission_reduction(VirusPtr & v, Model & model, int layer = -1);
     epiworld_double get_recovery_enhancer(VirusPtr & v, Model & model);
     epiworld_double get_death_reduction(VirusPtr & v, Model & model);
     ///@}
@@ -5014,6 +5016,28 @@ struct DiseaseTargets {
 };
 
 /**
+ * @brief The contact layers a tool's contact effects act in, by name (see
+ * `Tool::add_layer_target()`).
+ */
+struct LayerTargets {
+    std::vector< std::string > names; ///< Empty: every layer
+    uint64_t mask = ~uint64_t(0);     ///< Bit `l`: layer `l` (once resolved)
+    bool resolved = false;            ///< Whether `mask` matches `names`
+
+    void add(std::string layer);
+
+    /// Makes the names a mask (an unknown layer is an error naming `owner`).
+    void resolve(Model & model, const std::string & owner);
+
+    /// Whether it acts through layer `layer` (-1: not through a layer, where
+    /// only a tool without layer targets acts). With names, `resolve()` must
+    /// have run since they last changed (`Tool::acts_in()` checks).
+    bool has(int layer) const;
+
+    bool operator==(const LayerTargets & o) const { return names == o.names; }
+};
+
+/**
  * @brief Tools for defending the agent against the virus
  * 
  */
@@ -5038,6 +5062,7 @@ protected:
 
 
     DiseaseTargets targets_; ///< The diseases it acts on (see add_target())
+    LayerTargets layers_;    ///< The layers its contact effects act in
 
 
     void set_agent(Agent * p, size_t idx);
@@ -5105,6 +5130,32 @@ public:
     const std::vector< std::string > & get_targets() const { return targets_.names; }
     void clear_targets() { targets_ = DiseaseTargets(); }
     bool targets(const Virus & v) const { return targets_.has(v); }
+    ///@}
+
+    /**
+     * @name Layer targets
+     *
+     * @details A tool's contact effects (susceptibility and transmission
+     * reduction) act on the contacts through the layers it targets, by the
+     * layer's name (see `Model::add_layer()`): e.g., a mask worn at work and
+     * school, not at home. Without layer targets, they act in every layer.
+     * The recovery enhancer and death reduction are not about contacts, so
+     * layer targets leave them alone. An infection not drawn from a layer
+     * (e.g., given by code) sees only the tools without layer targets. A
+     * name the model has no layer of is an error at the start of the run; at
+     * most 64 layers can be targeted (ids 0 to 63).
+     *
+     * @param layer The name of a layer of the model.
+     */
+    ///@{
+    void add_layer_target(std::string layer);
+    void set_layer_targets(std::vector< std::string > layers);
+    const std::vector< std::string > & get_layer_targets() const { return layers_.names; }
+    void clear_layer_targets() { layers_ = LayerTargets(); }
+    /// Whether its contact effects act through layer `layer` (-1: no layer).
+    /// With layer targets, an error until they are resolved: when the run
+    /// starts, or when the tool is added to a running model.
+    bool acts_in(int layer) const;
     ///@}
 
     void set_name(std::string name);
@@ -5278,6 +5329,24 @@ struct DiseaseRecord {
     std::vector< int > hist_transition_counts;
     ///@}
 
+    /**
+     * @name Declared transitions by variant
+     * @details The transitions taken by agents carrying a variant of the
+     * disease (or catching it, for an infection), by variant: today's counts
+     * `[variant][transition]` (empty until one is counted) and the history
+     * (see `get_hist_virus_transitions()`). Recorded for the transitions an
+     * agent with the virus can take (`virus_transitions`: the infections and
+     * those leaving a carrier stage).
+     */
+    ///@{
+    std::vector< std::vector< int > > transition_virus_today;
+    std::vector< int > virus_transitions;
+    std::vector< int > hist_transition_virus_date;
+    std::vector< int > hist_transition_virus_id;
+    std::vector< int > hist_transition_virus_transition;
+    std::vector< int > hist_transition_virus_counts;
+    ///@}
+
     bool operator==(const DiseaseRecord & other) const;
 };
 
@@ -5362,9 +5431,11 @@ private:
      * One more agent took the declared transition `t` (see
      * `get_hist_transitions()`): of disease `track`, or (`t` a status
      * transition, `-2 - index`) of the statuses, recorded once, after the
-     * first disease's transitions.
+     * first disease's transitions. A stage transition is also counted under
+     * `virus` (the agent's variant, -1 for none) if that variant is of the
+     * disease (see `get_hist_virus_transitions()`).
      */
-    void record_declared_transition(int track, int t);
+    void record_declared_transition(int track, int t, int virus);
 
     /**
      * @brief The status and the stage of a cell of disease `d` (the one place
@@ -5526,6 +5597,34 @@ public:
         std::vector< std::string > * disease_names = nullptr
     ) const;
 
+    /**
+     * @brief How many agents carrying each variant took each declared
+     * transition of its disease.
+     * @details One row per recorded day, variant and transition, in that
+     * order. The transitions are those an agent with the virus can take: the
+     * infections (counted under the variant caught) and those leaving a
+     * carrier stage. Over the variants of a disease, a transition's counts add
+     * up to its count in `get_hist_transitions()`, except for an external
+     * transition that also leaves stages without the virus (its count there
+     * includes those agents). Seeding and imports are not transitions, as in
+     * `get_hist_transitions()`. The status transitions are not by variant.
+     * @param date The day.
+     * @param id The variant (its id; see `get_virus_name()`).
+     * @param transition The transition's name.
+     * @param counts How many agents took it that day.
+     * @param disease Only this disease's variants (`all_diseases`: every
+     * disease, one after the other).
+     * @param disease_names If given, the disease of each row.
+     */
+    void get_hist_virus_transitions(
+        std::vector< int > & date,
+        std::vector< int > & id,
+        std::vector< std::string > & transition,
+        std::vector< int > & counts,
+        int disease = all_diseases,
+        std::vector< std::string > * disease_names = nullptr
+    ) const;
+
     void get_hist_transition_matrix(
         std::vector< std::string > & status_from,
         std::vector< std::string > & stage_from,
@@ -5616,6 +5715,22 @@ public:
     void record_transmission(int i, int j, int virus, int i_expo_date, int layer = -1);
 
     size_t get_n_viruses() const; ///< Get the number of viruses
+
+    /**
+     * @brief A variant's name and disease, by its id.
+     * @details Every variant is recorded here, including those from
+     * mutations, which are not among the model's viruses (`Model::get_virus()`
+     * takes a position in the model, not a variant's id). Use these to label
+     * the variant ids the outputs return.
+     * @param virus_id The variant's id (`Virus::get_id()`).
+     * @return `get_virus_name()`, its name; `get_virus_disease()`, the index
+     * of its disease in `Model::get_diseases()`.
+     * @throws std::out_of_range If no variant has that id.
+     */
+    ///@{
+    const std::string & get_virus_name(int virus_id) const;
+    int get_virus_disease(int virus_id) const;
+    ///@}
     size_t get_n_tools() const; ///< Get the number of tools
 
     void set_user_data(std::vector< std::string > names);
@@ -6335,6 +6450,7 @@ class Model {
     friend class Queue;
     friend class layer::Network;
     friend class layer::Mixing;
+    friend class ContactLayer;
 
 protected:
 
@@ -6416,6 +6532,11 @@ protected:
     std::vector< epiworld_double > param_values;
     std::map<std::string, size_t, std::less<> > param_index;
     uint32_t param_layout_id = new_param_layout_id();
+
+    // Parameters that follow a cycle (set_param_cycle()), by position
+    std::map< size_t, std::vector< epiworld_double > > param_cycles;
+    void apply_param_cycles(int day);
+
     epiworld_fast_uint ndays = 0;
     Progress pb;
 
@@ -6750,7 +6871,10 @@ protected:
     const Track & nh_local(int global, int & local) const;
 
     void nh_build_states();
+
+    /// The reactions to `p`'s change (checked inline: most models have none)
     void nh_react(Agent & p, int transition, int track, int stage_old);
+    void nh_react_fire(Agent & p, int transition, int track, int stage_old);
 
     void nh_install(std::shared_ptr< NaturalHistory > def);
     void nh_reset();
@@ -6760,9 +6884,14 @@ protected:
     /// The diseases (bits) whose viruses the current draw may give (see
     /// nh_step_infection(); all, except during a draw of several diseases)
     uint64_t nh_trial_mask = ~uint64_t(0);
-    /// nh_step()'s stage part (`one`: the model has one disease, whose
-    /// infection is drawn first)
-    bool nh_step_stage(Track & track, Agent & p, unsigned int cell, bool one);
+    /**
+     * nh_step()'s stage part. `One`: the model has one disease, whose
+     * infection is drawn first; a template, so that the one-disease update
+     * (the common case) is compiled without the checks of several diseases
+     * and can be inlined.
+     */
+    template< bool One >
+    bool nh_step_stage(Track & track, Agent & p, unsigned int cell);
     void nh_step_status(Agent & p, unsigned int cell); ///< nh_step()'s status part
 
     /// The natural history whose values apply to `p` in a track: its
@@ -6831,11 +6960,14 @@ protected:
      * the susceptibility for a given virus.
      *
      */
+    ///
+    /// The contact effects take the layer of the contact (-1: none; see
+    /// `Tool::add_layer_target()`).
     virtual epiworld_double susceptibility_reduction_mixer(
-        Agent * agent, VirusPtr & virus
+        Agent * agent, VirusPtr & virus, int layer = -1
     );
     virtual epiworld_double transmission_reduction_mixer(
-        Agent * agent, VirusPtr & virus
+        Agent * agent, VirusPtr & virus, int layer = -1
     );
     virtual epiworld_double recovery_enhancer_mixer(
         Agent * agent, VirusPtr & virus
@@ -7466,6 +7598,43 @@ public:
     uint32_t get_param_layout_id() const { return param_layout_id; };
     ///@}
 
+    /**
+     * @name Parameters that follow a cycle
+     *
+     * @details `set_param_cycle(pname, values)` makes the parameter take
+     * `values[(d - 1) % values.size()]` on day `d`: the first value on day 1,
+     * the last on day `values.size()`, then the first again. Seven values give
+     * a weekly cycle, from a Monday:
+     *
+     * ```
+     * model.set_param_cycle("Public contact rate", {4, 4, 4, 4, 4, 6, 6});
+     * ```
+     *
+     * Anything that reads the parameter every day follows it: a layer's
+     * contact rate (`set_contact_rate()`) or weight (`set_weight()`), a rate in
+     * a natural history, a tool's effect. The day's value is set when the day
+     * is prepared, after the global events of the day before (where a global
+     * event that sets the parameter would set it), and at `reset()` for the
+     * start of a run (day 1's value). After a run, the parameter has the
+     * last day's value.
+     *
+     * While a cycle is set, it decides the parameter's value: `set_param()`
+     * lasts until the next day is prepared. The cycle is a setting: it lasts
+     * across runs, and setting or clearing it during a run is an error.
+     *
+     * Beware double counting: a rate from weekly-averaged data (e.g., a contact
+     * survey weighted by day of the week) already includes the weekends. A
+     * cycle around it should keep its weekly mean, as a weekday rate of
+     * `7/5` times the mean on a weekday-only layer does.
+     */
+    ///@{
+    void set_param_cycle(
+        std::string_view pname, std::vector< epiworld_double > values
+    );
+    void clear_param_cycle(std::string_view pname);
+    bool has_param_cycle(std::string_view pname) const;
+    ///@}
+
     void get_elapsed(
         std::string unit = "auto",
         epiworld_double * last_elapsed = nullptr,
@@ -7806,6 +7975,32 @@ public:
  * dirty layer and clears the flag. An edit made between runs becomes the new
  * baseline.
  *
+ * ### Who takes part: excluded statuses, closing
+ *
+ * An agent in a status or stage of contact weight 0 (`set_contact()`) is out
+ * of every layer. `exclude_status()` takes the agents in a status out of this
+ * layer only: e.g., the school layer excludes "Quarantined", while the
+ * household layer keeps them. An agent out of a layer neither samples it nor is
+ * sampled through it, in both directions, and a mixing layer counts only the
+ * agents present (its contact rate stays constant; within groups, the
+ * probability per pair does). Who is out is the status, so the status history
+ * already counts them. Excluded statuses are a setting, made between runs.
+ *
+ * `set_schedule()` makes a layer sample contacts on some days only, routinely
+ * (work and transit on weekdays): a day off the schedule is a day closed, but
+ * the schedule is a setting, made between runs, while `close()` is the
+ * one-off intervention a global event makes during a run. `is_closed()` says
+ * whether the layer has contacts today, for either reason.
+ *
+ * `close()` takes the whole layer out (a school closure) until `reopen()`:
+ * it samples no contacts, so it logs none and transmits nothing, and the
+ * days it was closed are not days shared in `layer::Mixing::groupmates_of()`.
+ * Like any edit, closing during a run takes effect at the end of the step
+ * (the layer is closed from the next day on) and lasts that run only; closing
+ * between runs makes the layer closed in every run. A weight of 0
+ * (`set_weight()`) is different: the contacts still happen (and are logged),
+ * but transmit nothing.
+ *
  * ### Contact tracing
  *
  * `enable_tracing()` makes the layer keep a log of its contacts (a
@@ -7840,6 +8035,27 @@ private:
             trace_log.reset(n, trace_max);
     }
 
+    std::vector< std::string > excluded_statuses; ///< See exclude_status()
+    std::vector< char > state_out;      ///< [state] Out of this layer by its statuses; empty: none
+    std::vector< bool > state_silent;   ///< [state] Transmits nothing here; empty: the model's
+
+    bool closed_base = false; ///< Closed in every run (closed between runs)
+    bool closed = false;      ///< No contacts today (closed, or off its schedule)
+    bool closed_next = false; ///< Closed from tomorrow (applied at the step's end)
+    /// The spans of days without contacts this run, `[first, last]`
+    /// (`INT_MAX`: still)
+    std::vector< std::pair< int, int > > closed_spans;
+
+    /// The days the layer samples contacts (empty: every day; see set_schedule())
+    std::function< bool(int) > schedule;
+
+    /// The masks of the run and the baseline closure (the model calls it at reset).
+    void reset_participation(const Model & model);
+
+    /// Applies today's `close()` / `reopen()` and the schedule, for tomorrow
+    /// (the model calls it at the step's end).
+    void apply_closure(int today);
+
 protected:
 
     /// The model the layer belongs to (set by the model), or `nullptr`.
@@ -7859,6 +8075,9 @@ protected:
     /// Call it from `reset()` once the baseline has been restored.
     void mark_clean() { dirty = false; }
 
+    /// Whether the model runs (settings are made between runs).
+    bool in_a_run() const { return in_run; }
+
 public:
 
     explicit ContactLayer(std::string name_) : name(std::move(name_)) {}
@@ -7867,7 +8086,11 @@ public:
     ContactLayer(const ContactLayer & other) :
         name(other.name), dirty(other.dirty), weight_ref(other.weight_ref),
         targets_(other.targets_), trace_max(other.trace_max),
-        trace_log(other.trace_log) {}
+        trace_log(other.trace_log),
+        excluded_statuses(other.excluded_statuses), state_out(other.state_out),
+        state_silent(other.state_silent), closed_base(other.closed_base),
+        closed(other.closed), closed_next(other.closed_next),
+        closed_spans(other.closed_spans), schedule(other.schedule) {}
 
     ContactLayer & operator=(const ContactLayer &) = delete;
 
@@ -7929,6 +8152,63 @@ public:
     }
     ///@}
 
+    /**
+     * @name Who takes part
+     * @brief Statuses out of this layer, and closing it (see the class
+     * description).
+     */
+    ///@{
+    /// Agents in `status` (a name in the model's statuses) are out of the layer.
+    void exclude_status(std::string status);
+    const std::vector< std::string > & get_excluded_statuses() const
+    {
+        return excluded_statuses;
+    }
+
+    void close();  ///< Closed from the next day (or every run, between runs)
+    void reopen(); ///< Open from the next day (or every run, between runs)
+    /// No contacts today: closed, or off its schedule. After a run, "today"
+    /// is the day after its last (the run's last step prepares it).
+    bool is_closed() const { return closed; }
+
+    /**
+     * @brief The days the layer samples contacts, as a cycle (between runs).
+     * @param days Day `d` (contacts start on day 1) is on if `days[(d - 1) %
+     * days.size()]`; e.g., five `true` and two `false` for weekdays only, the
+     * run starting on a Monday.
+     */
+    void set_schedule(std::vector< bool > days);
+
+    /// The days the layer samples contacts: those where `on(day)` is true
+    /// (between runs; read at the end of the day before).
+    void set_schedule(std::function< bool(int day) > on);
+
+    void clear_schedule(); ///< Every day (the default; between runs)
+    bool has_schedule() const { return static_cast< bool >(schedule); }
+
+    /// Whether the schedule has day `day` on (always, without one); a closure
+    /// takes the layer out on top of it.
+    bool is_scheduled(int day) const { return !schedule || schedule(day); }
+
+    /// Whether an agent in engine state `state` is out of the layer.
+    bool excludes(epiworld_fast_uint state) const;
+
+    /// Whether agent `agent_id` is out of this layer (by its excluded
+    /// statuses, or a contact weight of 0), for samplers of their own.
+    bool excludes_agent(size_t agent_id) const;
+
+    /// The states out of this layer by its excluded statuses (`nullptr`: none;
+    /// `excludes()` adds the states out of every layer).
+    const std::vector< char > * own_exclusions() const
+    {
+        return state_out.empty() ? nullptr : &state_out;
+    }
+
+    /// Calls `f(first, last)` for each span of days in `[a, b]` the layer was open.
+    template< typename F >
+    void open_days(int a, int b, F f) const;
+    ///@}
+
     /// Whether the virus spreads through the layer.
     bool admits(const Virus & v) const
     {
@@ -7943,7 +8223,8 @@ public:
      * carry a virus (repeats allowed), and reports them to the model's
      * post-sampling callback, if there is one.
      * @details This is the layer's part of a pull. Contacts in a state flagged
-     * in `exclude` (if not null) are skipped. Whether the contacts are able to
+     * in `exclude` (if not null) are skipped: the model passes the layer's
+     * `silent()` mask (states that transmit nothing here). Whether the contacts are able to
      * infect (their viruses, the weight) is up to the model.
      * @return The number of contacts appended.
      */
@@ -7953,6 +8234,10 @@ public:
         const std::vector< bool > * exclude,
         std::vector< size_t > & out
     ) = 0;
+
+    /// States that transmit nothing through the layer (not infectious, or
+    /// out of it), or `nullptr` if every state transmits.
+    const std::vector< bool > * silent() const;
 
     /// Rebuild what depends on the state of the population (end of each step).
     virtual void update(Model & model) = 0;
@@ -8013,6 +8298,230 @@ inline ContactTracing & ContactLayer::get_tracing()
 ////////////////////////////////////////////////////////////////////////////////
 
  End of -./include/epiworld/contactlayer-bones.hpp-
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////*/
+
+
+/*//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+ Start of -./include/epiworld/contactlayer-meat.hpp-
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////*/
+
+
+#ifndef EPIWORLD_CONTACTLAYER_MEAT_HPP
+#define EPIWORLD_CONTACTLAYER_MEAT_HPP
+
+/**
+ * @file contactlayer-meat.hpp
+ * @brief Who takes part in a contact layer: its excluded statuses, its
+ * closures and its schedule (see `ContactLayer`).
+ */
+
+inline void ContactLayer::exclude_status(std::string status)
+{
+
+    if (in_run)
+        throw std::logic_error(
+            "The contact layer '" + name + "': the statuses it excludes are "
+            "set between runs (close() and reopen() act during a run)."
+        );
+
+    if (
+        std::find(excluded_statuses.begin(), excluded_statuses.end(), status) ==
+        excluded_statuses.end()
+    )
+        excluded_statuses.push_back(std::move(status));
+
+}
+
+inline void ContactLayer::close()
+{
+    closed_next = true;
+    if (!in_run)
+        closed_base = closed = true;
+}
+
+inline void ContactLayer::reopen()
+{
+    closed_next = false;
+    if (!in_run)
+        closed_base = closed = false;
+}
+
+inline void ContactLayer::set_schedule(std::vector< bool > days)
+{
+
+    if (days.empty())
+        throw std::length_error(
+            "The contact layer '" + name + "': set_schedule() needs at least "
+            "one day."
+        );
+
+    set_schedule(std::function< bool(int) >([days = std::move(days)](int d) {
+        const size_t k = static_cast< size_t >(std::max(d - 1, 0));
+        return static_cast< bool >(days[k % days.size()]);
+    }));
+
+}
+
+inline void ContactLayer::set_schedule(std::function< bool(int day) > on)
+{
+
+    if (in_run)
+        throw std::logic_error(
+            "The contact layer '" + name + "': its schedule is set between "
+            "runs (close() and reopen() act during a run)."
+        );
+
+    if (!on)
+        throw std::invalid_argument(
+            "The contact layer '" + name + "': set_schedule() got an empty "
+            "function (clear_schedule() removes the schedule)."
+        );
+
+    schedule = std::move(on);
+
+}
+
+inline void ContactLayer::clear_schedule()
+{
+
+    if (in_run)
+        throw std::logic_error(
+            "The contact layer '" + name + "': its schedule is set between "
+            "runs."
+        );
+
+    schedule = nullptr;
+
+}
+
+inline bool ContactLayer::excludes(epiworld_fast_uint state) const
+{
+    return (!model->state_excluded.empty() && model->state_excluded[state]) ||
+        (!state_out.empty() && state_out[state]);
+}
+
+inline bool ContactLayer::excludes_agent(size_t agent_id) const
+{
+    return excludes(model->agent_state[agent_id]);
+}
+
+inline const std::vector< bool > * ContactLayer::silent() const
+{
+    if (!state_silent.empty())
+        return &state_silent;
+
+    return model->state_not_infectious.empty() ?
+        nullptr : &model->state_not_infectious;
+}
+
+inline void ContactLayer::reset_participation(const Model & m)
+{
+
+    closed = closed_next = closed_base;
+    closed_spans.clear();
+    if (closed_base)
+        closed_spans.push_back({0, INT_MAX});
+
+    state_out.clear();
+    state_silent.clear();
+    if (excluded_statuses.empty())
+        return;
+
+    // The statuses this layer excludes, by id
+    const std::vector< std::string > names = (m.get_statuses() != nullptr) ?
+        m.get_statuses()->get_stages() : std::vector< std::string >{"Free"};
+
+    std::vector< char > status_out(names.size(), 0);
+    for (const auto & s : excluded_statuses)
+    {
+        auto it = std::find(names.begin(), names.end(), s);
+        if (it == names.end())
+        {
+            std::string have;
+            for (const auto & n : names)
+                have += (have.empty() ? "\"" : ", \"") + n + "\"";
+
+            throw std::invalid_argument(
+                "The contact layer '" + name + "' excludes the status \"" + s +
+                "\", which the model does not have (its statuses: " + have +
+                ")."
+            );
+        }
+        status_out[static_cast< size_t >(it - names.begin())] = 1;
+    }
+
+    // The engine states in those statuses
+    const size_t ns = static_cast< size_t >(m.nstates);
+    state_out.assign(ns, 0);
+    for (size_t c = 0u; c < ns; ++c)
+        if (status_out[static_cast< size_t >(m.nh_status_of(static_cast< unsigned int >(c)))])
+            state_out[c] = 1;
+
+    // What transmits nothing here: the model's (which includes the states
+    // out of every layer), plus those out of this one
+    state_silent = m.state_not_infectious;
+    state_silent.resize(ns, false);
+    for (size_t c = 0u; c < ns; ++c)
+        state_silent[c] = state_silent[c] || (state_out[c] != 0);
+
+}
+
+inline void ContactLayer::apply_closure(int today)
+{
+
+    // Tomorrow: closed by close(), or off the schedule
+    const bool off = closed_next || !is_scheduled(today + 1);
+    if (off == closed)
+        return;
+
+    if (off)
+        closed_spans.push_back({today + 1, INT_MAX});
+    else
+        closed_spans.back().second = today;
+
+    closed = off;
+
+}
+
+template< typename F >
+inline void ContactLayer::open_days(int a, int b, F f) const
+{
+
+    // The closed spans are in order and do not overlap
+    int from = a;
+    for (const auto & span : closed_spans)
+    {
+        if (span.second < from)
+            continue;
+
+        if (span.first > b)
+            break;
+
+        if (span.first > from)
+            f(from, span.first - 1);
+
+        if (span.second >= b)
+            return;
+
+        from = span.second + 1;
+    }
+
+    if (from <= b)
+        f(from, b);
+
+}
+
+#endif
+/*//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+ End of -./include/epiworld/contactlayer-meat.hpp-
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////*/
@@ -9927,8 +10436,10 @@ std::shared_ptr< Mixing > mixing(std::string name);
  * @details Created with `layer::mixing()`. Every agent of a group takes part
  * in the mixing (the contacts are spread over all of them), and the agents in
  * the model's infectious states transmit (`Model::set_infectious_states()`).
- * The quarantine model takes its isolated agents out of the mixing altogether
- * (see `Model::set_excluded_states()`).
+ * Agents in a status or stage of contact weight 0 are out of every layer, and
+ * those in a status the layer excludes (`exclude_status()`) out of this one:
+ * they are not in the mixing, and the contact rate is spread over the agents
+ * present (see `ContactLayer`).
  *
  * ### Groups
  *
@@ -9990,6 +10501,30 @@ std::shared_ptr< Mixing > mixing(std::string name);
  * calibration can reuse one model). `set_groups()` sets the baseline grouping
  * and can only be called between runs.
  *
+ * ### Persistence: the usual group, or another of the same pool
+ *
+ * In a within-group layer, the grouping is each agent's *usual* group (its
+ * household, its 7:40 train). `set_pools()` gathers the groups into pools (a
+ * route, a station) and `set_persistence(q)` makes each agent attend its
+ * usual group on a given day with probability `q`, and otherwise another
+ * group of the same pool, drawn uniformly, that day only:
+ * - `q = 1`: fixed cohorts (the default; no draws);
+ * - `0 < q < 1`: familiar strangers (mostly the same train, sometimes another);
+ * - `q = 0`: another group of the pool every day.
+ *
+ * `q` is one for every agent, or one per agent (strict and irregular
+ * commuters). With one `q`, a day costs a draw per agent that switches, not
+ * per agent. An agent alone in its pool's only group always stays.
+ * `set_assignment(f)` is the general form: `f(agent, usual, model)` gives
+ * each agent's group every day (or `NO_GROUP`, out of the layer that day),
+ * e.g., from data; it is called for every agent, every day. A layer has a
+ * persistence or an assignment, not both.
+ *
+ * The groups of tomorrow are drawn at the end of the day, with the other
+ * moves; like them, they notify the model's queue and enter the history.
+ * `set_group()` during a run moves the agent's usual group. Pools,
+ * persistence and assignments are settings, made between runs.
+ *
  * ### History (traced within-group layers)
  *
  * A within-group layer with tracing on (`enable_tracing()`) keeps, for the
@@ -10040,6 +10575,31 @@ private:
 
     /// Moves made during a step (agent, group), applied by `update()`
     std::vector< std::pair< size_t, size_t > > moves;
+
+    // Persistence (see set_persistence() and set_assignment())
+    std::vector< size_t > pool_of;          ///< Pool of each group (empty: none)
+    std::vector< double > persistence;      ///< `q`: one, or one per agent (empty: 1)
+    /// Group of an agent tomorrow, given its usual group (empty: none)
+    std::function< size_t(size_t, size_t, Model &) > assignment;
+    std::vector< std::vector< size_t > > pool_groups; ///< Groups of each pool (ascending), this run
+    std::vector< size_t > pool_index; ///< Pool of each group, as an index of `pool_groups`
+    std::vector< size_t > usual;    ///< Usual group of each agent, this run
+    std::vector< size_t > movable;  ///< Agents that can attend another group (ascending)
+    bool movable_stale = true;
+    std::vector< size_t > away;      ///< Agents in another group than their usual one
+    std::vector< char > away_next;   ///< Per agent, drawn away for tomorrow (scratch)
+    std::vector< size_t > away_ids;  ///< Those drawn away for tomorrow (scratch)
+
+    /// Whether the groups are drawn every step (persistence or an assignment)
+    bool daily_groups() const
+    {
+        return static_cast< bool >(assignment) || !persistence.empty();
+    }
+
+    void reset_persistence(Model & model);
+    void rebuild_movable();
+    /// Appends to `moves` where each agent goes tomorrow (see update()).
+    void draw_groups(Model & model);
 
     // History of the run (traced within-group layers, see groupmates_of())
 
@@ -10140,7 +10700,8 @@ public:
      */
     void set_groups(Assign a, size_t n_groups_);
 
-    /// Group of an agent (`NO_GROUP` if it is not in the layer).
+    /// Group of an agent today (`NO_GROUP` if it is not in the layer). After
+    /// a run, the group of the day after its last, which its last step drew.
     size_t get_group(size_t agent_id) const
     {
         check_agent(agent_id);
@@ -10156,6 +10717,7 @@ public:
      * @details Like every change made during a step, it is in force for the
      * contacts of the next step: the move waits for the end of the step, when
      * the pools are rebuilt (until then, `get_group()` gives the old group).
+     * With a persistence or an assignment, it moves the agent's usual group.
      */
     void set_group(size_t agent_id, size_t group);
 
@@ -10220,6 +10782,46 @@ public:
         check_group(g);
         return members[g];
     }
+
+    /**
+     * @name Persistence: a usual group, or another of the same pool
+     * @brief Within-group layers only (see the class description).
+     */
+    ///@{
+    /**
+     * @brief Gathers the groups into pools (a route, a station), between runs.
+     * @param pools The pool of each group (any labels; groups with the same
+     * label are in the same pool).
+     */
+    void set_pools(std::vector< size_t > pools);
+    const std::vector< size_t > & get_pools() const { return pool_of; }
+
+    /**
+     * @brief The probability `q` that an agent attends its usual group on a
+     * given day (between runs).
+     * @param q One for every agent, or one per agent; `1` keeps every agent
+     * in its usual group (no draws).
+     */
+    void set_persistence(std::vector< double > q);
+    void set_persistence(double q) { set_persistence(std::vector< double >{q}); }
+    const std::vector< double > & get_persistence() const { return persistence; }
+    void clear_persistence(); ///< Everyone stays in its usual group (the default)
+
+    /**
+     * @brief The group of each agent each day, from a function (between runs):
+     * the general form of persistence, for data-driven schedules.
+     * @param f Called at the end of every day for every agent, as `f(agent,
+     * usual, model)`, with `usual` its usual group (`NO_GROUP` if it has none);
+     * it returns the agent's group tomorrow, or `NO_GROUP` (out of the layer
+     * that day: a remote-work day).
+     */
+    void set_assignment(std::function< size_t(size_t agent, size_t usual, Model & model) > f);
+    bool has_assignment() const { return static_cast< bool >(assignment); }
+    void clear_assignment();
+
+    /// The usual group of an agent this run (`get_group()` gives today's).
+    size_t get_usual_group(size_t agent_id) const;
+    ///@}
 
     /// A groupmate of an agent over a window of days (see `groupmates_of()`).
     struct Groupmate {
@@ -10304,6 +10906,8 @@ inline void Mixing::set_groups(Assign a, size_t n_groups_)
         throw std::invalid_argument(
             "Mixing layer '" + this->get_name() + "': empty grouping."
         );
+
+    usual.clear();
 
     // A label is a group, or none
     const std::string lname = this->get_name();
@@ -10397,8 +11001,287 @@ inline void Mixing::set_group(size_t agent_id, size_t group)
         );
 
     groups_baseline[agent_id] = group;
+    if (!usual.empty())
+        usual[agent_id] = group;
     move(agent_id, group, false);
     clear_history();
+
+}
+
+inline void Mixing::set_pools(std::vector< size_t > pools)
+{
+    if (this->in_a_run())
+        throw std::logic_error(
+            "Mixing layer '" + this->get_name() + "': its pools are set "
+            "between runs."
+        );
+
+    pool_of = std::move(pools);
+}
+
+inline void Mixing::set_persistence(std::vector< double > q)
+{
+
+    if (this->in_a_run())
+        throw std::logic_error(
+            "Mixing layer '" + this->get_name() + "': its persistence is set "
+            "between runs."
+        );
+
+    if (q.empty())
+        throw std::length_error(
+            "Mixing layer '" + this->get_name() + "': set_persistence() needs "
+            "at least one probability (clear_persistence() removes it)."
+        );
+
+    for (double x : q)
+        if (!((x >= 0.0) && (x <= 1.0)))
+            throw std::range_error(
+                "Mixing layer '" + this->get_name() + "': persistence "
+                "probabilities must be in [0, 1] (" + std::to_string(x) + ")."
+            );
+
+    persistence = std::move(q);
+
+}
+
+inline void Mixing::clear_persistence()
+{
+    if (this->in_a_run())
+        throw std::logic_error(
+            "Mixing layer '" + this->get_name() + "': its persistence is set "
+            "between runs."
+        );
+
+    persistence.clear();
+}
+
+inline void Mixing::set_assignment(
+    std::function< size_t(size_t agent, size_t usual, Model & model) > f
+)
+{
+
+    if (this->in_a_run())
+        throw std::logic_error(
+            "Mixing layer '" + this->get_name() + "': its assignment is set "
+            "between runs."
+        );
+
+    if (!f)
+        throw std::invalid_argument(
+            "Mixing layer '" + this->get_name() + "': set_assignment() got an "
+            "empty function (clear_assignment() removes it)."
+        );
+
+    assignment = std::move(f);
+
+}
+
+inline void Mixing::clear_assignment()
+{
+    if (this->in_a_run())
+        throw std::logic_error(
+            "Mixing layer '" + this->get_name() + "': its assignment is set "
+            "between runs."
+        );
+
+    assignment = nullptr;
+}
+
+inline size_t Mixing::get_usual_group(size_t agent_id) const
+{
+    check_agent(agent_id);
+    // The last run's usual groups (none without persistence: today's)
+    return usual.empty() ? groups[agent_id] : usual[agent_id];
+}
+
+inline void Mixing::reset_persistence(Model & model)
+{
+
+    usual.clear();
+    movable.clear();
+    away.clear();
+    away_ids.clear();
+    pool_groups.clear();
+    if (!daily_groups())
+        return;
+
+    const std::string lname = "Mixing layer '" + this->get_name() + "': ";
+    if (!within_groups())
+        throw std::logic_error(
+            lname + "persistence and assignments are for layers that mix "
+            "within groups (set_contact_prob())."
+        );
+
+    if (assignment && !persistence.empty())
+        throw std::logic_error(
+            lname + "it has both a persistence and an assignment; the "
+            "assignment decides every group, so clear one of them."
+        );
+
+    const size_t n = model.size();
+    if (!persistence.empty())
+    {
+
+        if ((persistence.size() != 1u) && (persistence.size() != n))
+            throw std::length_error(
+                lname + std::to_string(persistence.size()) + " persistence "
+                "probabilities, but the model has " + std::to_string(n) +
+                " agents (give one, or one per agent)."
+            );
+
+        if (pool_of.size() != n_groups)
+            throw std::length_error(
+                lname + "persistence draws another group of the same pool, "
+                "so set_pools() needs one pool per group (" +
+                std::to_string(n_groups) + " groups, " +
+                std::to_string(pool_of.size()) + " pools given)."
+            );
+
+        // The groups of each pool, by label
+        std::vector< size_t > labels = pool_of;
+        std::sort(labels.begin(), labels.end());
+        labels.erase(std::unique(labels.begin(), labels.end()), labels.end());
+        pool_groups.assign(labels.size(), {});
+        for (size_t g = 0u; g < n_groups; ++g)
+        {
+            const size_t k = static_cast< size_t >(
+                std::lower_bound(labels.begin(), labels.end(), pool_of[g]) -
+                labels.begin()
+            );
+            pool_groups[k].push_back(g);
+        }
+
+        // From group to pool
+        pool_index.assign(n_groups, 0u);
+        for (size_t k = 0u; k < pool_groups.size(); ++k)
+            for (size_t g : pool_groups[k])
+                pool_index[g] = k;
+
+        away_next.assign(n, 0);
+
+    }
+
+    usual = groups;
+    movable_stale = true;
+
+}
+
+inline void Mixing::rebuild_movable()
+{
+
+    // Agents with a usual group in a pool of two or more groups, and a
+    // persistence below 1
+    movable.clear();
+    const bool per_agent = persistence.size() > 1u;
+    for (size_t i = 0u; i < usual.size(); ++i)
+    {
+        const size_t g = usual[i];
+        if ((g == NO_GROUP) || (pool_groups[pool_index[g]].size() < 2u))
+            continue;
+
+        if ((per_agent ? persistence[i] : persistence[0u]) >= 1.0)
+            continue;
+
+        movable.push_back(i);
+    }
+
+    movable_stale = false;
+
+}
+
+inline void Mixing::draw_groups(Model & model)
+{
+
+    // The moves of the day change usual groups
+    for (const auto & [agent_id, group] : moves)
+        if (usual[agent_id] != group)
+        {
+            usual[agent_id] = group;
+            movable_stale = true;
+        }
+
+    if (assignment)
+    {
+        for (size_t i = 0u; i < usual.size(); ++i)
+        {
+            const size_t g = assignment(i, usual[i], model);
+            if ((g != NO_GROUP) && (g >= n_groups))
+                throw std::range_error(
+                    "Mixing layer '" + this->get_name() + "': the assignment "
+                    "gave agent " + std::to_string(i) + " the group " +
+                    std::to_string(g) + ", out of range (" +
+                    std::to_string(n_groups) + " groups)."
+                );
+
+            moves.emplace_back(i, g);
+        }
+        return;
+    }
+
+    if (movable_stale)
+        rebuild_movable();
+
+    // Who attends another group tomorrow: each movable agent with
+    // probability 1 - q. With one q, the gaps between them are geometric, so
+    // only those who move cost a draw.
+    away_ids.clear();
+    auto go_away = [&](size_t i) {
+        const auto & pg = pool_groups[pool_index[usual[i]]];
+        // Another group of the pool, uniformly
+        size_t k = std::min(
+            static_cast< size_t >(model.runif() * static_cast< double >(pg.size() - 1u)),
+            pg.size() - 2u
+        );
+        if (pg[k] >= usual[i])
+            ++k;
+        // The groups of a pool are ascending, so pg[k] skips the usual group
+        moves.emplace_back(i, pg[k]);
+        away_next[i] = 1;
+        away_ids.push_back(i);
+    };
+
+    if (persistence.size() == 1u)
+    {
+        const double q = persistence[0u];
+        if (q <= 0.0)
+        {
+            for (size_t i : movable)
+                go_away(i);
+        }
+        else if (!movable.empty())
+        {
+            const double log_q = std::log(q);
+            size_t pos = 0u;
+            while (true)
+            {
+                const double u = model.runif();
+                const double skip = std::floor(std::log(1.0 - u) / log_q);
+                if (skip >= static_cast< double >(movable.size() - pos))
+                    break;
+
+                pos += static_cast< size_t >(skip);
+                go_away(movable[pos++]);
+                if (pos >= movable.size())
+                    break;
+            }
+        }
+    }
+    else
+    {
+        for (size_t i : movable)
+            if (model.runif() >= persistence[i])
+                go_away(i);
+    }
+
+    // Back to the usual group, for those away today and not tomorrow
+    for (size_t i : away)
+        if (!away_next[i])
+            moves.emplace_back(i, usual[i]);
+
+    for (size_t i : away_ids)
+        away_next[i] = 0;
+    away.swap(away_ids);
 
 }
 
@@ -10625,6 +11508,7 @@ inline void Mixing::reset(Model & model)
 
     rebuild_members();
     moves.clear();
+    reset_persistence(model);
 
     clear_history();
     history = within_groups() && this->is_tracing();
@@ -10647,6 +11531,11 @@ inline void Mixing::reset(Model & model)
 
 inline void Mixing::update(Model & model)
 {
+
+    // Where each agent goes tomorrow, after the moves of the day (which
+    // change usual groups)
+    if (daily_groups())
+        draw_groups(model);
 
     // Moves made during the step; the history keeps each agent's net change
     // (several moves of one agent in a step are one, or none if it is back)
@@ -10679,7 +11568,8 @@ inline void Mixing::update(Model & model)
         rebuild_layout();
 
     const size_t ns = static_cast< size_t >(model.nstates);
-    const auto & not_infectious = model.state_not_infectious;
+    // States that transmit nothing here (not infectious, or out of the layer)
+    const std::vector< bool > * silent_states = this->silent();
 
     std::fill(counts.begin(), counts.end(), 0u);
 
@@ -10689,7 +11579,7 @@ inline void Mixing::update(Model & model)
     for (size_t s = 0u; s < ns; ++s)
     {
         if ((model.state_carriers[s] == 0u) ||
-            (!not_infectious.empty() && not_infectious[s]))
+            ((silent_states != nullptr) && (*silent_states)[s]))
             continue;
 
         for (size_t id : model.state_index_members(s))
@@ -10719,7 +11609,7 @@ inline void Mixing::update(Model & model)
         pool[offsets[g] + counts[g]++] = id;
     }
 
-    // In the mixing = group size - agents in excluded states
+    // In the mixing = group size - agents out of the layer
     for (size_t g = 0u; g < n_groups; ++g)
         n_available[g] = group_size[g];
 
@@ -10729,7 +11619,7 @@ inline void Mixing::update(Model & model)
         size_t k = 0u;
         for (size_t id : absent_ids)
         {
-            if (model.state_excluded[model.agent_state[id]])
+            if (this->excludes(model.agent_state[id]))
                 absent_ids[k++] = id;
             else
             {
@@ -10742,7 +11632,7 @@ inline void Mixing::update(Model & model)
 
     for (size_t s = 0u; s < ns; ++s)
     {
-        if (!model.state_excluded[s])
+        if (!this->excludes(static_cast< epiworld_fast_uint >(s)))
             continue;
 
         for (size_t id : model.state_index_members(s))
@@ -10850,9 +11740,11 @@ inline void Mixing::groupmates_of(
     d1 = std::max(d1, 1);
     d2 = std::min(d2, this->model->today());
 
-    // One entry per shared span, merged per groupmate below
+    // One entry per shared span, merged per groupmate below; the days the
+    // layer was closed are not shared
     out.clear();
-    spells(agent_id, d1, d2, [&](size_t g, int a, int b) {
+    this->open_days(d1, d2, [&](int open_from, int open_to) {
+    spells(agent_id, open_from, open_to, [&](size_t g, int a, int b) {
 
         auto shared = [&](size_t other) {
             spells(other, a, b, [&](size_t h, int first, int last) {
@@ -10875,6 +11767,7 @@ inline void Mixing::groupmates_of(
             )
                 shared(d->agent);
 
+    });
     });
 
     std::sort(out.begin(), out.end(), [](const auto & x, const auto & y) {
@@ -11045,7 +11938,7 @@ inline size_t Mixing::sample(
                 agent, model, out
             );
     }
-    else if (!model.state_excluded[model.agent_state[agent]])
+    else if (!this->excludes(model.agent_state[agent]))
     {
 
         // The day's draws of the agent's group (see update())
@@ -13181,6 +14074,29 @@ inline void DataBase::reset()
         r.hist_transition_id.clear();
         r.hist_transition_counts.clear();
 
+        // By variant: the transitions an agent with the virus can take
+        r.virus_transitions.clear();
+        if (!model->tracks.empty())
+        {
+            const auto & nh = *model->tracks[di].nh;
+            for (size_t t = 0u; t < nh.get_n_transitions(); ++t)
+            {
+                const auto & tr = nh.get_transition(static_cast< int >(t));
+                bool carries = (tr.kind == TransitionKind::infection);
+                for (int s : tr.from)
+                    carries = carries || nh.is_carrier(s);
+                if (carries)
+                    r.virus_transitions.push_back(static_cast< int >(t));
+            }
+        }
+        r.transition_virus_today.resize(get_n_viruses());
+        for (auto & c : r.transition_virus_today)
+            c.clear();
+        r.hist_transition_virus_date.clear();
+        r.hist_transition_virus_id.clear();
+        r.hist_transition_virus_transition.clear();
+        r.hist_transition_virus_counts.clear();
+
         r.m_hospitalizations.reset();
 
     }
@@ -13373,6 +14289,28 @@ inline void DataBase::record_disease(DiseaseRecord & r)
         r.transition_today[k] = 0;
     }
 
+    // By variant (the disease's variants)
+    if (!r.virus_transitions.empty())
+        for (size_t v = 0u; v < r.transition_virus_today.size(); ++v)
+        {
+
+            if ((recs.size() > 1u) && (disease_of_virus(static_cast< int >(v)) != d))
+                continue;
+
+            auto & c = r.transition_virus_today[v];
+            for (int t : r.virus_transitions)
+            {
+                r.hist_transition_virus_date.push_back(model->today());
+                r.hist_transition_virus_id.push_back(static_cast< int >(v));
+                r.hist_transition_virus_transition.push_back(t);
+                r.hist_transition_virus_counts.push_back(
+                    c.empty() ? 0 : c[static_cast< size_t >(t)]
+                );
+            }
+            std::fill(c.begin(), c.end(), 0);
+
+        }
+
     // Now the diagonal must reflect the state
     for (size_t s_i = 0u; s_i < nc; ++s_i)
     {
@@ -13416,7 +14354,10 @@ inline void DataBase::drop_variants()
     reg.virus_parent_id.resize(n);
     reg.virus_disease.resize(n);
     for (auto & r : recs)
+    {
         r.today_virus.resize(n);
+        r.transition_virus_today.resize(n);
+    }
 
 }
 
@@ -13445,9 +14386,12 @@ inline void DataBase::record_virus(Virus & v, bool founder)
         recs.resize(1u);
 
     for (size_t d = 0u; d < recs.size(); ++d)
+    {
         recs[d].today_virus.push_back(
             std::vector< int >(recs[d].ncells, 0)
         );
+        recs[d].transition_virus_today.emplace_back();
+    }
     if (static_cast< size_t >(disease_of_virus(id)) < recs.size())
         recs[static_cast< size_t >(disease_of_virus(id))].today_total_nviruses_active++;
 
@@ -13633,15 +14577,30 @@ inline void DataBase::record_transition(
 
 }
 
-inline void DataBase::record_declared_transition(int track, int t)
+inline void DataBase::record_declared_transition(int track, int t, int virus)
 {
+
     if (Model::nh_is_status_tr(t))
+    {
         ++recs[0u].transition_today[
             model->tracks[0u].nh->get_n_transitions() +
             static_cast< size_t >(Model::nh_status_tr(t))
         ];
-    else
-        ++recs[static_cast< size_t >(track)].transition_today[static_cast< size_t >(t)];
+        return;
+    }
+
+    auto & r = recs[static_cast< size_t >(track)];
+    ++r.transition_today[static_cast< size_t >(t)];
+
+    // By variant, if the agent carries (or caught) one of the disease
+    if ((virus < 0) || ((recs.size() > 1u) && (disease_of_virus(virus) != track)))
+        return;
+
+    auto & c = r.transition_virus_today[static_cast< size_t >(virus)];
+    if (c.empty())
+        c.assign(r.transition_today.size(), 0);
+    ++c[static_cast< size_t >(t)];
+
 }
 
 inline void DataBase::record_transmission(
@@ -13665,6 +14624,21 @@ inline void DataBase::record_transmission(
 inline size_t DataBase::get_n_viruses() const
 {
     return reg.virus_name.size();
+}
+
+inline const std::string & DataBase::get_virus_name(int virus_id) const
+{
+    if ((virus_id < 0) || (static_cast< size_t >(virus_id) >= reg.virus_name.size()))
+        throw std::out_of_range(
+            "No variant has the id " + std::to_string(virus_id) + "."
+        );
+    return reg.virus_name[static_cast< size_t >(virus_id)];
+}
+
+inline int DataBase::get_virus_disease(int virus_id) const
+{
+    get_virus_name(virus_id); // Checks the id
+    return disease_of_virus(virus_id);
 }
 
 inline size_t DataBase::get_n_tools() const
@@ -14508,6 +15482,42 @@ inline void DataBase::get_hospitalizations(
 
 }
 
+inline void DataBase::get_hist_virus_transitions(
+    std::vector< int > & date,
+    std::vector< int > & id,
+    std::vector< std::string > & transition,
+    std::vector< int > & counts,
+    int disease,
+    std::vector< std::string > * disease_names
+) const
+{
+
+    if (model->tracks.empty())
+        throw std::logic_error(
+            "get_hist_virus_transitions() needs a model with a natural history."
+        );
+
+    date.clear();
+    id.clear();
+    transition.clear();
+    counts.clear();
+    if (disease_names != nullptr)
+        disease_names->clear();
+
+    for (int d : diseases_of(disease))
+    {
+        const auto & r = recs[static_cast< size_t >(d)];
+        const auto & nh = *model->tracks[static_cast< size_t >(d)].nh;
+        epi_append(date, r.hist_transition_virus_date);
+        epi_append(id, r.hist_transition_virus_id);
+        epi_append(counts, r.hist_transition_virus_counts);
+        for (int t : r.hist_transition_virus_transition)
+            transition.push_back(nh.get_transition(t).name);
+        disease_rows(disease_names, r.hist_transition_virus_id.size(), d);
+    }
+
+}
+
 inline void DataBase::get_hist_transitions(
     std::vector< int > & date,
     std::vector< std::string > & transition,
@@ -15152,6 +16162,11 @@ inline bool DiseaseRecord::operator==(const DiseaseRecord & other) const
             "DataBase:: today_tool[i] don't match"
             )
     }
+
+    VECT_MATCH(
+        hist_transition_virus_counts, other.hist_transition_virus_counts,
+        "DataBase:: hist_transition_virus_counts[i] don't match"
+    )
 
     // {Susceptible, Infected, etc.}
 
@@ -16626,6 +17641,7 @@ inline void Model::events_run()
         const epiworld_fast_int queue_change = a.queue;
         const unsigned int state_old = p->state;
         const bool had_virus = (p->virus != nullptr);
+        const int virus_old = had_virus ? p->virus->get_id() : -1;
 
         #ifdef EPI_DEBUG
         if (new_state >= static_cast<epiworld_fast_int>(nstates))
@@ -16751,10 +17767,14 @@ inline void Model::events_run()
 
             }
 
-            // Counted, if a declared transition did it
+            // Counted, if a declared transition did it (by variant: the one
+            // the agent carries, caught, or just released)
             if ((transition != -1) && (transition != NH_SEED) &&
                 (transition != NH_INITIAL) && (p->state != state_old))
-                db.record_declared_transition(ev_track, transition);
+                db.record_declared_transition(
+                    ev_track, transition,
+                    (p->virus != nullptr) ? p->virus->get_id() : virus_old
+                );
 
             if (use_queuing && (p->state != state_old))
                 nh_queue_move(*p, state_old);
@@ -16812,13 +17832,14 @@ inline void Model::events_run()
 ///@{
 inline epiworld_double Model::susceptibility_reduction_mixer(
     Agent* p,
-    VirusPtr & v
+    VirusPtr & v,
+    int layer
 )
 {
     epiworld_double total = 1.0;
     for (auto & tool : p->get_tools())
     {
-        if (!tool->targets(*v))
+        if (!tool->targets(*v) || !tool->acts_in(layer))
             continue;
 
         total *= (1.0 - tool->get_susceptibility_reduction(v, this));
@@ -16830,13 +17851,14 @@ inline epiworld_double Model::susceptibility_reduction_mixer(
 
 inline epiworld_double Model::transmission_reduction_mixer(
     Agent* p,
-    VirusPtr & v
+    VirusPtr & v,
+    int layer
 )
 {
     epiworld_double total = 1.0;
     for (auto & tool : p->get_tools())
     {
-        if (!tool->targets(*v))
+        if (!tool->targets(*v) || !tool->acts_in(layer))
             continue;
 
         total *= (1.0 - tool->get_transmission_reduction(v, this));
@@ -16920,6 +17942,7 @@ inline Model::Model(const Model & model) :
     param_values(model.param_values),
     param_index(model.param_index),
     param_layout_id(model.param_layout_id),
+    param_cycles(model.param_cycles),
     ndays(model.ndays),
     pb(model.pb),
     state_fun(model.state_fun),
@@ -17027,6 +18050,7 @@ inline Model::Model(Model && model) :
     param_values(std::move(model.param_values)),
     param_index(std::move(model.param_index)),
     param_layout_id(model.param_layout_id),
+    param_cycles(std::move(model.param_cycles)),
     // Others
     ndays(model.ndays),
     pb(std::move(model.pb)),
@@ -17107,6 +18131,7 @@ inline Model & Model::operator=(const Model & m)
     param_values    = m.param_values;
     param_index     = m.param_index;
     param_layout_id = m.param_layout_id;
+    param_cycles    = m.param_cycles;
     ndays      = m.ndays;
     pb         = m.pb;
 
@@ -17459,6 +18484,10 @@ inline void Model::add_tool(const Tool & t, Assign a)
     auto cloned = t.clone_ptr();
     if (running && !tracks.empty())
         cloned->targets_.resolve(*this, "The tool \"" + cloned->get_name() + "\"", true);
+    if (running)
+        cloned->layers_.resolve(*this, "The tool \"" + cloned->get_name() + "\"");
+    else
+        cloned->layers_.resolved = false; // A copy may carry another model's mask
     db.record_tool(*cloned);
     tools.push_back(std::shared_ptr<Tool>(std::move(cloned)));
     tool_assign.push_back(std::move(a));
@@ -17577,7 +18606,9 @@ inline void Model::next() {
 
     #endif
 
-    // The layers see what changed during the step before the next one samples
+    // Tomorrow's parameters, then the layers see what changed during the step
+    // before the next one samples
+    apply_param_cycles(today() + 1);
     update_layers();
 
     db.record();
@@ -17617,54 +18648,60 @@ inline Model & Model::run(
     last_seed = seed;
 
     // From here on get_ndays() is the run's horizon (see is_running()). The
-    // guard clears the flag however the run ends, exceptions included.
-    struct RunningGuard {
-        Model & model;
-        explicit RunningGuard(Model & m) : model(m) { model.set_running(true); }
-        ~RunningGuard() { model.set_running(false); }
-    } running_guard(*this);
+    // flag is cleared however the run ends, exceptions included. (Not with a
+    // guard object: GCC 13 at -O2 dropped the guard's store on the exception
+    // path, leaving the model "running" after a run that threw.)
+    set_running(true);
+    try {
 
-    // Starting first infection and tools
-    reset();
+        // Starting first infection and tools
+        reset();
 
-    // Record the baseline (day 0) and advance to day 1
-    next();
+        // Record the baseline (day 0) and advance to day 1
+        next();
 
-    // Initializing the simulation
-    chrono_start();
+        // Initializing the simulation
+        chrono_start();
 
-    // Verifying if the user wants to see the progress bar
-    if (get_verbose())
-    {
-        printf_epiworld("Running the model...\n");
+        // Verifying if the user wants to see the progress bar
+        if (get_verbose())
+        {
+            printf_epiworld("Running the model...\n");
+        }
+
+        for (epiworld_fast_uint niter = 0; niter < get_ndays(); ++niter)
+        {
+
+            #ifdef EPI_DEBUG
+            db.n_transmissions_potential = 0;
+            db.n_transmissions_today = 0;
+            #endif
+
+            // We can execute these components in whatever order the
+            // user needs.
+            this->update_state();
+
+            // We start with the Global events
+            this->run_globalevents();
+
+            // This locks all the changes (the layers, including their rewiring,
+            // are updated first)
+            this->next();
+
+            // Mutation must happen at the very end of all
+            this->mutate_virus();
+
+        }
+
+        // The last reaches the end... (the parameters too: the last day's values)
+        this->current_date--;
+        apply_param_cycles(today());
+
+    } catch (...) {
+        set_running(false);
+        throw;
     }
-
-    for (epiworld_fast_uint niter = 0; niter < get_ndays(); ++niter)
-    {
-
-        #ifdef EPI_DEBUG
-        db.n_transmissions_potential = 0;
-        db.n_transmissions_today = 0;
-        #endif
-
-        // We can execute these components in whatever order the
-        // user needs.
-        this->update_state();
-
-        // We start with the Global events
-        this->run_globalevents();
-
-        // This locks all the changes (the layers, including their rewiring,
-        // are updated first)
-        this->next();
-
-        // Mutation must happen at the very end of all
-        this->mutate_virus();
-
-    }
-
-    // The last reaches the end...
-    this->current_date--;
+    set_running(false);
 
     chrono_end();
 
@@ -18087,6 +19124,9 @@ inline void Model::reset() {
     // Restablishing people
     pb = Progress(ndays, 80);
 
+    // The cycles start over (day 1's values)
+    apply_param_cycles(1);
+
     for (auto & p : population)
         p.reset();
 
@@ -18099,6 +19139,7 @@ inline void Model::reset() {
     // them.
     for (auto & layer : layers)
     {
+        layer->reset_participation(*this);
         layer->reset(*this);
         layer->reset_tracing(population.size());
     }
@@ -18158,6 +19199,11 @@ inline void Model::reset() {
         nh_resolve();
         nh_reset();
     }
+
+    // The layers the tools' contact effects act in (with or without a
+    // natural history)
+    for (auto & t : tools)
+        t->layers_.resolve(*this, "The tool \"" + t->get_name() + "\"");
 
     // The batch of sampled contacts
     if (post_sampling_on)
@@ -18673,6 +19719,48 @@ inline void Model::set_param_at(ParamId id, epiworld_double value)
     param_values[id.idx] = value;
 }
 
+inline void Model::set_param_cycle(
+    std::string_view pname, std::vector< epiworld_double > values
+)
+{
+    if (is_running())
+        throw std::logic_error(
+            "set_param_cycle(\"" + std::string(pname) + "\"): a cycle is set "
+            "between runs."
+        );
+
+    if (values.empty())
+        throw std::length_error(
+            "set_param_cycle(\"" + std::string(pname) + "\"): the cycle has "
+            "no values."
+        );
+
+    param_cycles[get_param_id(pname).idx] = std::move(values);
+}
+
+inline void Model::clear_param_cycle(std::string_view pname)
+{
+    if (is_running())
+        throw std::logic_error(
+            "clear_param_cycle(\"" + std::string(pname) + "\"): a cycle is "
+            "cleared between runs."
+        );
+
+    param_cycles.erase(get_param_id(pname).idx);
+}
+
+inline bool Model::has_param_cycle(std::string_view pname) const
+{
+    return param_cycles.count(get_param_id(pname).idx) > 0u;
+}
+
+inline void Model::apply_param_cycles(int day)
+{
+    const size_t d = static_cast< size_t >(std::max(day - 1, 0));
+    for (const auto & [idx, values] : param_cycles)
+        param_values[idx] = values[d % values.size()];
+}
+
 #define DURCAST(tunit,txtunit) {\
         elapsed       = std::chrono::duration_cast<std::chrono:: tunit>(\
             time_end - time_start).count(); \
@@ -18955,7 +20043,10 @@ inline void Model::set_running(bool value)
 inline void Model::update_layers()
 {
     for (auto & layer : layers)
+    {
+        layer->apply_closure(today());
         layer->update(*this);
+    }
 }
 
 inline void Model::layers_attach()
@@ -19238,6 +20329,23 @@ inline bool Model::operator==(const Model & other) const
         // By name, so the order parameters were added in does not matter
         params() != other.params(),
         "Model:: parameters don't match"
+    )
+
+    // The cycles, by name too
+    auto cycles_by_name = [](const Model & m) {
+        std::map< std::string, std::vector< epiworld_double > > res;
+        for (const auto & p : m.param_index)
+        {
+            const auto c = m.param_cycles.find(p.second);
+            if (c != m.param_cycles.end())
+                res.emplace(p.first, c->second);
+        }
+        return res;
+    };
+
+    EPI_DEBUG_FAIL_AT_TRUE(
+        cycles_by_name(*this) != cycles_by_name(other),
+        "Model:: parameter cycles don't match"
     )
 
     EPI_DEBUG_FAIL_AT_TRUE(
@@ -20251,6 +21359,93 @@ inline void Tool::add_target(std::string disease)
     targets_.add(std::move(disease));
 }
 
+inline void LayerTargets::add(std::string layer)
+{
+    if (std::find(names.begin(), names.end(), layer) != names.end())
+        return;
+
+    names.push_back(std::move(layer));
+    resolved = false;
+}
+
+inline bool LayerTargets::has(int layer) const
+{
+    if (names.empty())
+        return true;
+
+    return (layer >= 0) && (layer < 64) && (((mask >> layer) & 1u) != 0u);
+}
+
+inline void LayerTargets::resolve(Model & model, const std::string & owner)
+{
+
+    // Unresolved until the loop ends (an unknown layer leaves it so)
+    resolved = false;
+    if (names.empty())
+    {
+        mask = ~uint64_t(0);
+        resolved = true;
+        return;
+    }
+
+    mask = 0u;
+    for (const auto & n : names)
+    {
+        size_t id = 0u;
+        try
+        {
+            id = model.get_layer_id(n);
+        }
+        catch (const std::exception &)
+        {
+            std::string all;
+            for (size_t l = 0u; l < model.get_n_layers(); ++l)
+                all += (all.empty() ? "\"" : ", \"") +
+                    model.get_layer(l).get_name() + "\"";
+            throw std::logic_error(
+                owner + " targets the layer \"" + n + "\", which the model "
+                "does not have (its layers: " + (all.empty() ? "none" : all) +
+                ")."
+            );
+        }
+
+        if (id >= 64u)
+            throw std::logic_error(
+                owner + " targets the layer \"" + n + "\", whose id (" +
+                std::to_string(id) + ") is above 63, the most a tool can target."
+            );
+
+        mask |= uint64_t(1) << id;
+    }
+
+    resolved = true;
+
+}
+
+inline bool Tool::acts_in(int layer) const
+{
+    if (!layers_.resolved && !layers_.names.empty())
+        throw std::logic_error(
+            "The tool \"" + get_name() + "\" has layer targets that are not "
+            "resolved yet: they are resolved when the run starts, or when the "
+            "tool is added to a running model (change them before then)."
+        );
+
+    return layers_.has(layer);
+}
+
+inline void Tool::add_layer_target(std::string layer)
+{
+    layers_.add(std::move(layer));
+}
+
+inline void Tool::set_layer_targets(std::vector< std::string > layers)
+{
+    layers_ = LayerTargets();
+    for (auto & l : layers)
+        layers_.add(std::move(l));
+}
+
 inline void Tool::set_targets(std::vector< std::string > diseases)
 {
     targets_ = DiseaseTargets();
@@ -20300,6 +21495,9 @@ inline bool Tool::operator==(const Tool & other) const
 
 
     if (!(targets_ == other.targets_))
+        return false;
+
+    if (!(layers_ == other.layers_))
         return false;
 
     return true;
@@ -20710,6 +21908,13 @@ inline void Agent::add_tool(
 
     ToolPtr tool_ptr = std::shared_ptr<Tool>(tool.clone_ptr());
 
+    // The model's copy is resolved at reset, or when added during a run; one
+    // added between a reset and a manual day loop is resolved here
+    if (!tool_ptr->layers_.resolved)
+        tool_ptr->layers_.resolve(
+            model, "The tool \"" + tool_ptr->get_name() + "\""
+        );
+
     model._add_event(
         this, nullptr, tool_ptr, state_new, queue, EventAction::AddTool
         );
@@ -20857,17 +22062,19 @@ inline void Agent::rm_virus(
 
 inline epiworld_double Agent::get_susceptibility_reduction(
     VirusPtr & v,
-    Model & model
+    Model & model,
+    int layer
 ) {
 
-    return model.susceptibility_reduction_mixer(this, v);
+    return model.susceptibility_reduction_mixer(this, v, layer);
 }
 
 inline epiworld_double Agent::get_transmission_reduction(
     VirusPtr & v,
-    Model & model
+    Model & model,
+    int layer
 ) {
-    return model.transmission_reduction_mixer(this, v);
+    return model.transmission_reduction_mixer(this, v, layer);
 }
 
 inline epiworld_double Agent::get_recovery_enhancer(
@@ -21318,9 +22525,9 @@ inline size_t Model::add_exposures_impl(
             continue;
 
         epiworld_double p =
-            (1.0 - agent->get_susceptibility_reduction(v, *this)) *
+            (1.0 - agent->get_susceptibility_reduction(v, *this, layer_id)) *
             p_inf *
-            (1.0 - contact.get_transmission_reduction(v, *this))
+            (1.0 - contact.get_transmission_reduction(v, *this, layer_id))
             ;
 
         // The weight scales the odds p / (1 - p); a certain exposure stays so
@@ -21377,16 +22584,22 @@ inline Virus * Model::sample_virus(Agent * agent)
         );
 
     const size_t id = static_cast< size_t >(agent->get_id());
-    const std::vector< bool > * exclude =
-        state_not_infectious.empty() ? nullptr : &state_not_infectious;
+    const epiworld_fast_uint state = agent_state[id];
 
     size_t n_contacts = 0u;
     size_t n_exposures = 0u;
     for (const auto & layer : layers)
     {
 
+        // A closed layer, or one whose statuses leave the agent out, has no
+        // contacts for it (the states out of every layer are the layers' to
+        // handle, as before)
+        const std::vector< char > * out = layer->own_exclusions();
+        if (layer->is_closed() || ((out != nullptr) && (*out)[state]))
+            continue;
+
         layer_contacts.clear();
-        const size_t n = layer->sample(id, *this, exclude, layer_contacts);
+        const size_t n = layer->sample(id, *this, layer->silent(), layer_contacts);
         if (n == 0u)
             continue;
 
@@ -21594,6 +22807,12 @@ inline void Model::transmission_push_impl()
             for (auto * net : network_layers)
             {
 
+                // A closed layer, or one whose statuses leave the carrier out,
+                // reaches no one (a carrier out of every layer is no source)
+                const std::vector< char > * net_out = net->own_exclusions();
+                if (net->is_closed() || ((net_out != nullptr) && (*net_out)[agent_state[j_id]]))
+                    continue;
+
                 // Layer rules, as add_exposures() applies them in a pull
                 const bool weighted = net->has_weight();
                 const epiworld_double weight = weighted ?
@@ -21608,7 +22827,7 @@ inline void Model::transmission_push_impl()
                     // of the states rules them out without loading the agent.
                     const size_t t = agent_state[i_id];
 
-                    if (!push_pushable[t])
+                    if (!push_pushable[t] || ((net_out != nullptr) && (*net_out)[t]))
                         continue;
 
                     Agent & i = population[i_id];
@@ -21640,9 +22859,9 @@ inline void Model::transmission_push_impl()
 
                     // Exactly the expression the pull uses, in the same order.
                     epiworld_double p =
-                        (1.0 - i.get_susceptibility_reduction(v, *this)) *
+                        (1.0 - i.get_susceptibility_reduction(v, *this, layer_id)) *
                         nh_infection_prob(i, *v, tracks[0u]) *
-                        (1.0 - j.get_transmission_reduction(v, *this))
+                        (1.0 - j.get_transmission_reduction(v, *this, layer_id))
                         ;
 
                     // The weight scales the odds; a certain exposure stays so
@@ -22731,7 +23950,7 @@ inline void Model::nh_build_states()
         UpdateFun([](Agent * p, Model * m) -> void { m->nh_step(*p); }) :
         UpdateFun([](Agent * p, Model * m) -> void {
             const unsigned int c = p->state;
-            m->nh_step_stage(m->tracks[0u], *p, c, true);
+            m->nh_step_stage< true >(m->tracks[0u], *p, c);
             if (m->st)
                 m->nh_step_status(*p, c);
         });
@@ -23243,7 +24462,7 @@ inline void Model::nh_step(Agent & p)
     const int infected = (p.virus == nullptr) ? nh_step_infection(p, c) : -1;
     for (auto & track : tracks)
         if (track.id != infected)
-            nh_step_stage(track, p, c, false);
+            nh_step_stage< false >(track, p, c);
 
     if (st)
         nh_step_status(p, c);
@@ -23324,11 +24543,11 @@ inline int Model::nh_step_infection(Agent & p, unsigned int c)
 
 }
 
+template< bool One >
 inline bool Model::nh_step_stage(
     Track & track,
     Agent & p,
-    unsigned int c,
-    bool one
+    unsigned int c
 )
 {
 
@@ -23339,12 +24558,12 @@ inline bool Model::nh_step_stage(
     // track's (with one disease the virus is always of it; see nh_of())
     const auto & v = p.virus;
     const NaturalHistory & h =
-        (v && v->nh_def && (one || (v->disease == track.id))) ?
+        (v && v->nh_def && (One || (v->disease == track.id))) ?
         *v->nh_def : *track.nh;
 
     // 1. Infection by contact (one disease; not out of the layers)
     if (
-        one && (si.infection >= 0) && (p.virus == nullptr) &&
+        One && (si.infection >= 0) && (p.virus == nullptr) &&
         (state_excluded.empty() || !state_excluded[c])
     )
     {
@@ -23555,9 +24774,12 @@ inline void Model::nh_enter(
 
 inline void Model::nh_react(Agent & p, int transition, int track, int stage_old)
 {
+    if (!nh_reactions.empty())
+        nh_react_fire(p, transition, track, stage_old);
+}
 
-    if (nh_reactions.empty())
-        return;
+inline void Model::nh_react_fire(Agent & p, int transition, int track, int stage_old)
+{
 
     const size_t id = static_cast< size_t >(p.id);
     const Track & t = tracks[static_cast< size_t >(track)];
@@ -26599,12 +27821,22 @@ inline ModelSIRLogit::ModelSIRLogit(
 
             size_t nviruses_tmp = 0u;
 
-            // Every network layer, in the order the layers were added
+            // Every network layer, in the order the layers were added: open,
+            // and without p or the neighbor in a status it excludes
             for (auto * net : m.get_network_layers())
+            {
+
+            if (net->is_closed() || net->excludes_agent(static_cast< size_t >(p.get_id())))
+                continue;
+
+            const int layer_id = static_cast< int >(net->get_id());
             for (auto * neighbor : net->neighbors_view(static_cast< size_t >(p.get_id())))
             {
 
                 if (neighbor->get_virus() == nullptr)
+                    continue;
+
+                if (net->excludes_agent(static_cast< size_t >(neighbor->get_id())))
                     continue;
 
                 auto & v = neighbor->get_virus();
@@ -26612,13 +27844,15 @@ inline ModelSIRLogit::ModelSIRLogit(
                 m.reserve_tmp(nviruses_tmp + 1u);
 
                 const double x = baseline +
-                    (1.0 - p.get_susceptibility_reduction(v, m)) *
+                    (1.0 - p.get_susceptibility_reduction(v, m, layer_id)) *
                     p_contact.eval(p, v.get(), m) *
-                    (1.0 - neighbor->get_transmission_reduction(v, m)) *
+                    (1.0 - neighbor->get_transmission_reduction(v, m, layer_id)) *
                     coef_exposure;
 
                 m.array_double_tmp[nviruses_tmp] = 1.0 / (1.0 + std::exp(-x));
                 m.array_virus_tmp[nviruses_tmp++] = &(*v);
+
+            }
 
             }
 
@@ -26762,10 +27996,20 @@ inline ModelDiffNet::ModelDiffNet(
         ModelDiffNet * diffmodel = model_cast<ModelDiffNet>(&m);
 
         size_t n_neighbors = 0u;
-        // Every network layer, in the order the layers were added
+        // Every network layer, in the order the layers were added: open, and
+        // without the agent or the neighbor out of it
         for (auto * net : m.get_network_layers())
+        {
+
+        if (net->is_closed() || net->excludes_agent(static_cast< size_t >(agent.get_id())))
+            continue;
+
+        const int layer_id = static_cast< int >(net->get_id());
         for (auto * neighbor : net->neighbors_view(static_cast< size_t >(agent.get_id())))
         {
+
+            if (net->excludes_agent(static_cast< size_t >(neighbor->get_id())))
+                continue;
 
             ++n_neighbors;
 
@@ -26778,8 +28022,10 @@ inline ModelDiffNet::ModelDiffNet(
                 innovations[vid] = &(*v);
 
             exposure[vid] +=
-                (1.0 - agent.get_susceptibility_reduction(v, m)) *
-                (1.0 - agent.get_transmission_reduction(v, m));
+                (1.0 - agent.get_susceptibility_reduction(v, m, layer_id)) *
+                (1.0 - neighbor->get_transmission_reduction(v, m, layer_id));
+
+        }
 
         }
 
@@ -26884,9 +28130,9 @@ inline ModelDiffNet::ModelDiffNet(
  * 2. traces the contacts of the detected agents in every layer's log (the
  *    model turns tracing on at reset), within "Contact tracing window" days,
  *    each found with probability "Contact tracing probability". A free
- *    contact without tools who is willing to quarantine is quarantined if
- *    susceptible or exposed ("Quarantined"), or isolated if infected and
- *    willing to isolate ("Isolated").
+ *    contact without a tool for the model's disease who is willing to
+ *    quarantine is quarantined if susceptible or exposed ("Quarantined"), or
+ *    isolated if infected and willing to isolate ("Isolated").
  *
  * Declared rules:
  *
@@ -26897,6 +28143,13 @@ inline ModelDiffNet::ModelDiffNet(
  *   that day ("Onset in quarantine").
  * - Entering Severe admits the agent ("Admitted", recorded as a
  *   hospitalization); leaving it discharges the agent ("Discharged").
+ *
+ * **With several diseases** (see `Model::add_virus()`), detection, tracing
+ * and the declared rules follow the model's own disease (the first): an
+ * agent sick with another disease is not detected, and a traced contact is
+ * judged by its stage in the model's disease. Quarantine and isolation still
+ * take the agent out of every layer, so they stop the other diseases'
+ * contacts too.
  *
  * **Implementation details:**
  * <a href="../impl/quarantine-isolation-and-contact-tracing.md">Quarantine, Isolation, and Contact Tracing</a>
@@ -27111,8 +28364,14 @@ inline void ModelSEIRQuarantine::_quarantine_process(Model * m)
                 if ((m->get_status(agent) != FREE) || (s > INFECTED))
                     continue;
 
-                // Agents with some tool are not quarantined
-                if (agent.get_n_tools() != 0u)
+                // Agents with a tool for the model's disease are not
+                // quarantined
+                bool protected_ = false;
+                for (size_t k = 0u; (k < agent.get_n_tools()) && !protected_; ++k)
+                    protected_ = agent.get_tool(static_cast< int >(k))->targets(
+                        m->get_virus(0u)
+                    );
+                if (protected_)
                     continue;
 
                 if (!model->quarantine_willingness[contact_id])

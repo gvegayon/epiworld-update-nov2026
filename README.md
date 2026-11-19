@@ -18,6 +18,13 @@ About 30 minutes.
   (`results/benchmark_*.csv`), from the `v1-layers` branch of
   epiworld-benchmark, with that repository's own definitions of time,
   memory and model lines. `make benchmark` refreshes them.
+- `fig/diagrams/`: hand-drawn SVG diagrams (self-contained, white
+  background): `epiworld-day.svg` (a run, day by day) and
+  `epiworld-infection.svg` (where an infection comes from), also proposed
+  for the epiworld docs (UofUEpiBio/epiworld#385); `epiworld-why-1.0.svg`
+  (0.18 against 1.0), `epiworld-roadmap.svg` (the phases),
+  `epiworld-transitions.svg` (the four kinds of transitions) and
+  `epiworld-models.svg` (0.18 models onto 1.0 models plus a layer).
 - `styles.scss`: the theme.
 
 ## Building

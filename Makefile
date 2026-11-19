@@ -22,8 +22,14 @@ endif
 
 all: results slides
 
+# epiworldR is installed at the commit the branch points to now, so the image
+# rebuilds (and records the commit) whenever the branch moves
+EPIWORLDR_BRANCH ?= v1-layers
+
 image:
-	$(CONTAINER) build -t $(IMAGE) -f .devcontainer/Containerfile .devcontainer
+	$(CONTAINER) build -t $(IMAGE) -f .devcontainer/Containerfile \
+	  --build-arg EPIWORLDR_REF=$$(git ls-remote https://github.com/UofUEpiBio/epiworldR refs/heads/$(EPIWORLDR_BRANCH) | cut -f1) \
+	  .devcontainer
 
 results: $(CSV)
 
