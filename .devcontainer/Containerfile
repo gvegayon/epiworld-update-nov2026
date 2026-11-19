@@ -1,0 +1,34 @@
+FROM ghcr.io/rocker-org/devcontainer/r-ver:4.6
+
+# Architecture-specific variable (built in Docker BuildKit)
+ARG TARGETARCH
+# epiworldR 1.0: a branch for now; a tag (v1.0.0) or a commit once released
+ARG EPIWORLDR_REF=v1-layers
+
+# Quarto (same version as the epiworldR devcontainer)
+RUN wget -q https://github.com/quarto-dev/quarto-cli/releases/download/v1.9.35/quarto-1.9.35-linux-${TARGETARCH}.deb && \
+    dpkg -i quarto-1.9.35-linux-${TARGETARCH}.deb && \
+    rm quarto-1.9.35-linux-${TARGETARCH}.deb
+
+# C++ toolchain for the examples, gdb for debugging
+RUN apt-get update && apt-get install --no-install-recommends -y \
+      g++ make gdb && \
+    rm -rf /var/lib/apt/lists/*
+
+# R: what the slides use, then epiworldR 1.0
+RUN install2.r --error ggplot2 data.table quarto remotes cpp11 decor && \
+    installGithub.r UofUEpiBio/epiworldR@${EPIWORLDR_REF}
+
+# Headless Chromium, so the mermaid diagrams render inside the container.
+# Playwright ships native builds for amd64 and arm64 (quarto's own installer
+# downloads an x86-64 binary on arm64). QUARTO_CHROMIUM tells quarto where it is.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN apt-get update && apt-get install --no-install-recommends -y python3-pip && \
+    pip install --break-system-packages playwright && \
+    playwright install --with-deps chromium && \
+    ln -s $(find /opt/playwright -type f -name chrome -path '*chrome-linux*' | head -1) \
+      /usr/local/bin/chromium && \
+    rm -rf /var/lib/apt/lists/*
+ENV QUARTO_CHROMIUM=/usr/local/bin/chromium
+
+CMD ["bash"]

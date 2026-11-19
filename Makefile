@@ -1,5 +1,6 @@
 # Build and run the examples (writing results/*.csv), then render the slides.
 #
+#   make image     # build the devcontainer image (.devcontainer/Containerfile)
 #   make results   # compile and run every example (in the epiworld devcontainer
 #                  # image if podman or docker is available, else with g++)
 #   make slides    # quarto render
@@ -19,6 +20,9 @@ endif
 
 all: results slides
 
+image:
+	$(CONTAINER) build -t $(IMAGE) -f .devcontainer/Containerfile .devcontainer
+
 results: $(CSV)
 
 results/%.csv: examples/%.cpp vendor/epiworld.hpp
@@ -36,4 +40,4 @@ slides: $(CSV)
 clean:
 	rm -rf build results/*.csv index.html index_files
 
-.PHONY: all results slides clean
+.PHONY: all image results slides clean

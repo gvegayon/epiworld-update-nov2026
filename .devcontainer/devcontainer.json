@@ -1,0 +1,21 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+	"name": "epiworld 1.0",
+	"build": {
+		"dockerfile": "Containerfile"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"reditorsupport.r",
+				"quarto.quarto",
+				"ms-vscode.cpptools",
+				"ms-vscode.live-server"
+			],
+			"settings": {
+				"r.alwaysUseActiveTerminal": true
+			}
+		}
+	},
+	"remoteUser": "root"
+}
