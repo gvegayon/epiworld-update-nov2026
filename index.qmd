@@ -19,7 +19,7 @@ format:
       data-background-size: 'contain'
     width: 1280
     height: 720
-    footer: "George G. Vega Yon -- epiworld 1.0 -- <https://ggvy.cl>"
+    footer: "George G. Vega Yon -- epiworld 1.0 -- <https://ggvy.cl/slides/epiworld1.0>"
     mermaid-format: png
     mermaid:
       theme: neutral
